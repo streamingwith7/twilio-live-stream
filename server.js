@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken')
 
 const dev = process.env.NODE_ENV !== 'production'
 const hostname = 'localhost'
-const port = process.env.PORT
+const port = process.env.PORT || 5000
 
 const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
