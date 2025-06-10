@@ -1,0 +1,77 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  firstName   String
+  lastName    String
+  phoneNumber String?
+  department  String?
+  password    String
+  streams     Stream[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("users")
+}
+
+model CallRecord {
+  id              String              @id @default(cuid())
+  callSid         String              @unique
+  phoneNumber     String
+  fromNumber      String
+  toNumber        String
+  status          String
+  direction       String              // "inbound" or "outbound"
+  startTime       DateTime?
+  endTime         DateTime?
+  duration        Int?
+  recordingUrl    String?
+  isActive        Boolean             @default(true)
+  transcriptions  CallTranscription[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@map("call_records")
+}
+
+model CallTranscription {
+  id           String     @id @default(cuid())
+  callRecordId String
+  callRecord   CallRecord @relation(fields: [callRecordId], references: [id], onDelete: Cascade)
+  speaker      String     // "caller" or "agent"
+  text         String
+  confidence   Float?
+  timestamp    DateTime   @default(now())
+  startTime    Float?     // Offset in seconds from call start
+  endTime      Float?     // Offset in seconds from call start
+
+  @@map("call_transcriptions")
+}
+
+model Stream {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  isLive      Boolean  @default(false)
+  streamKey   String   @unique
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("streams")
+}
