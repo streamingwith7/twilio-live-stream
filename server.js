@@ -23,15 +23,16 @@ app.prepare().then(() => {
     }
   })
 
-  // Initialize Socket.IO
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === 'production' ? false : ['http://localhost:3000'],
-      methods: ['GET', 'POST']
+      origin: process.env.NODE_ENV === 'production' 
+        ? process.env.NEXT_PUBLIC_SITE_URL
+        : ['http://localhost:3000'],
+      methods: ['GET', 'POST'],
+      credentials: true
     }
   })
 
-  // Authentication middleware for Socket.IO
   io.use((socket, next) => {
     const token = socket.handshake.auth.token
     if (!token) {
