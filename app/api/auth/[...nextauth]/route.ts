@@ -6,6 +6,7 @@ import { verifyPassword } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 
 const handler = NextAuth({
+  secret: process.env.NEXTAUTH_SECRET || 'default-development-secret',
   providers: [
     CredentialsProvider({
       name: 'Credentials',
@@ -41,10 +42,11 @@ const handler = NextAuth({
     })
   ],
   pages: {
-    signIn: '/login' // Custom login page path
+    signIn: '/login'
   },
   session: {
-    strategy: 'jwt'
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60
   },
   callbacks: {
     async session({ session, token }) {
@@ -61,4 +63,4 @@ const handler = NextAuth({
   }
 })
 
-export { handler as GET, handler as POST } 
+export { handler as GET, handler as POST }
