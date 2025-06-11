@@ -68,9 +68,7 @@ export class TranscriptionService {
             timestamp: new Date().toISOString()
           };
 
-          // Save to database
           try {
-            // Find the call record first
             const callRecord = await prisma.callRecord.findUnique({
               where: { callSid }
             });
@@ -124,10 +122,7 @@ export class TranscriptionService {
 
   async processAudioChunk(callSid: string, sequenceNumber: string, audioData: string): Promise<void> {
     try {
-      // Convert base64 audio to buffer
       const audioBuffer = Buffer.from(audioData, 'base64');
-      
-      // Send directly to Deepgram for real-time processing
       this.sendAudio(audioBuffer);
       
     } catch (error) {
@@ -152,5 +147,4 @@ export class TranscriptionService {
   }
 }
 
-// Singleton instance
 export const transcriptionService = new TranscriptionService() 
