@@ -9,7 +9,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.text()
     
-    // Parse WebSocket message from Twilio Media Streams
     const message = JSON.parse(body)
     
     switch (message.event) {
@@ -19,12 +18,10 @@ export async function POST(request: NextRequest) {
         
       case 'start':
         console.log('🎙️ Media stream started:', message.start)
-        // Create or update call record and start transcription
         await handleCallStart(message.start)
         break
         
       case 'media':
-        // Handle real-time audio data
         await handleMediaStream(message.media)
         break
         
@@ -65,11 +62,9 @@ async function handleCallStart(startData: any) {
       }
     })
 
-    // Start Deepgram transcription for this call
     const liveTranscription = await transcriptionService.startTranscription(
       startData.callSid,
       (transcriptData) => {
-        // Broadcast transcription to all connected clients
         if (global.io) {
           global.io.emit('newTranscription', transcriptData)
           console.log(`📝 New transcription for ${startData.callSid}: ${transcriptData.speaker} - ${transcriptData.text.substring(0, 50)}...`)
@@ -79,7 +74,6 @@ async function handleCallStart(startData: any) {
 
     activeTranscriptions.set(startData.callSid, liveTranscription)
 
-    // Broadcast call start to all connected clients
     if (global.io) {
       global.io.emit('callStarted', {
         callSid: startData.callSid,
@@ -97,10 +91,8 @@ async function handleCallStart(startData: any) {
 
 async function handleMediaStream(mediaData: any) {
   try {
-    // The audio is base64 encoded μ-law (PCMU) format
     const audioBuffer = Buffer.from(mediaData.payload, 'base64')
     
-    // Send audio directly to Deepgram for real-time transcription
     transcriptionService.sendAudio(audioBuffer)
     
   } catch (error) {
@@ -110,14 +102,12 @@ async function handleMediaStream(mediaData: any) {
 
 async function handleCallStop(stopData: any) {
   try {
-    // Stop Deepgram transcription
     const liveTranscription = activeTranscriptions.get(stopData.callSid)
     if (liveTranscription) {
       transcriptionService.stopTranscription()
       activeTranscriptions.delete(stopData.callSid)
     }
 
-    // Update call record
     const callRecord = await prisma.callRecord.updateMany({
       where: { 
         callSid: stopData.callSid,
@@ -130,7 +120,6 @@ async function handleCallStop(stopData: any) {
       }
     })
 
-    // Broadcast call end to all connected clients
     if (global.io) {
       global.io.emit('callEnded', {
         callSid: stopData.callSid,

@@ -5,7 +5,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.formData()
     
-    // Extract call information from Twilio webhook
     const callSid = body.get('CallSid') as string
     const callStatus = body.get('CallStatus') as string
     const to = body.get('To') as string
@@ -13,7 +12,6 @@ export async function POST(request: NextRequest) {
     const duration = body.get('CallDuration') as string
     const direction = body.get('Direction') as string
 
-    // Map Twilio call status to our status format
     const mapStatus = (twilioStatus: string) => {
       switch (twilioStatus) {
         case 'ringing': return 'ringing'
@@ -26,7 +24,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update or create call record in database
     const callRecord = await prisma.callRecord.upsert({
       where: { callSid },
       update: {
@@ -73,7 +70,6 @@ export async function POST(request: NextRequest) {
 
     console.log('Real-time call status update:', callUpdate)
 
-    // Return TwiML to start media stream for active calls
     if (callStatus === 'in-progress') {
       const twiml = `
         <Response>
