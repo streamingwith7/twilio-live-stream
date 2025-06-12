@@ -36,7 +36,6 @@ export default function CallLogsPage() {
     setUser(JSON.parse(userData))
     setLoading(false)
 
-    // Setup WebSocket connection
     const newSocket = io({
       auth: {
         token: token
@@ -56,7 +55,6 @@ export default function CallLogsPage() {
     setSocket(newSocket)
     fetchCallLogs(token, phoneNumber)
 
-    // Refresh call logs every 30 seconds
     const interval = setInterval(() => {
       fetchCallLogs(token, phoneNumber)
     }, 30000)
@@ -168,8 +166,21 @@ export default function CallLogsPage() {
           <div>{new Date(call.dateCreated).toLocaleTimeString()}</div>
         </div>
       </div>
-      <div className="text-xs text-gray-400 font-mono">
-        Call ID: {call.sid}
+      <div className="flex justify-between items-center">
+        <div className="text-xs text-gray-400 font-mono">
+          Call ID: {call.sid}
+        </div>
+        {type === 'in-progress' && (
+          <button
+            onClick={() => router.push(`/transcription?callSid=${call.sid}&phone=${encodeURIComponent(phoneNumber || '')}`)}
+            className="flex items-center px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+            </svg>
+            View Transcription
+          </button>
+        )}
       </div>
     </div>
   )
@@ -248,10 +259,8 @@ export default function CallLogsPage() {
             </div>
           )}
 
-          {/* Call Logs Content */}
           {callLogs && !loadingCallLogs && (
             <div className="space-y-8">
-              {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
                   <div className="flex items-center">
@@ -360,6 +369,9 @@ export default function CallLogsPage() {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Call ID
                             </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -391,6 +403,19 @@ export default function CallLogsPage() {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-400 font-mono">
                                 {call.sid}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                {call.status.toLowerCase() === 'in-progress' && (
+                                  <button
+                                    onClick={() => router.push(`/transcription?callSid=${call.sid}&phone=${encodeURIComponent(phoneNumber || '')}`)}
+                                    className="flex items-center px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors"
+                                  >
+                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                                    </svg>
+                                    Transcription
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           ))}

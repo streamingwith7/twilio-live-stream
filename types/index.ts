@@ -51,3 +51,58 @@ export interface User {
   firstName?: string
   lastName?: string
 }
+
+export interface TranscriptMessage {
+  callSid: string
+  streamSid?: string
+  text: string
+  type: 'interim' | 'final'
+  confidence?: number
+  timestamp: string
+  words?: TranscriptWord[]
+}
+
+export interface TranscriptWord {
+  word: string
+  start: number
+  end: number
+  confidence: number
+  punctuated_word?: string
+}
+
+export interface CallDetails {
+  from: string
+  to: string
+  direction: string
+}
+
+export interface StreamResponse {
+  success: boolean
+  originalCallSid: string
+  streamSid: string
+  streamName: string
+  streamingEnabled: boolean
+  audioCapture: {
+    bothSides: boolean
+    transparent: boolean
+    explanation: string
+  }
+  callDetails: CallDetails
+}
+
+export interface StreamStatusEvent {
+  streamSid: string
+  callSid: string
+  status: string
+  timestamp: string
+}
+
+export interface TranscriptionEvents {
+  transcriptionReady: { callSid: string; streamSid: string; timestamp: string }
+  transcriptionEnded: { callSid: string; streamSid: string; timestamp: string }
+  transcriptionError: { callSid: string; streamSid: string; error: string; timestamp: string }
+  liveTranscript: TranscriptMessage
+  utteranceEnd: { callSid: string; streamSid: string; timestamp: string }
+  speechStarted: { callSid: string; streamSid: string; timestamp: string }
+  streamStatus: StreamStatusEvent
+}

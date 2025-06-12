@@ -1,0 +1,25 @@
+[2025-06-11T08:55:14.936Z] [INFO] 🚀 Server ready on http://closemydeals.com:5000
+[2025-06-11T08:55:14.937Z] [INFO] 📡 Socket.IO server is running
+[2025-06-11T08:55:14.937Z] [INFO] 📞 Real-time Twilio call monitoring active
+[2025-06-11T08:55:16.180Z] [INFO] User cmbqyg6yx0000qk0ldxsw3k4s connected
+[2025-06-11T08:55:17.931Z] [INFO] User cmbqceqne0000twh8p61qds3a connected
+[2025-06-11T09:21:19.818Z] [LOG] [32mSTT -> Deepgram connection opened[39m
+[2025-06-11T09:25:01.596Z] [LOG] [32mSTT -> Deepgram connection opened[39m
+[2025-06-11T10:05:32.085Z] [ERROR] STT -> Deepgram error
+[2025-06-11T10:05:32.085Z] [ERROR] [object Object]
+[2025-06-11T10:05:32.086Z] [LOG] [33mSTT -> Deepgram connection closed[39m
+[2025-06-11T10:07:22.365Z] [ERROR] STT -> Deepgram error
+[2025-06-11T10:07:22.365Z] [ERROR] [object Object]
+[2025-06-11T10:07:22.365Z] [LOG] [33mSTT -> Deepgram connection closed[39m
+[2025-06-11T10:08:56.668Z] [ERROR] STT -> Deepgram error
+[2025-06-11T10:08:56.669Z] [ERROR] 
+[2025-06-11T10:08:56.670Z] [LOG] [33mSTT -> Deepgram connection closed[39m
+[2025-06-11T10:10:28.017Z] [ERROR] STT -> Deepgram error
+[2025-06-11T10:10:28.017Z] [ERROR] [object Object]
+[2025-06-11T10:10:28.018Z] [LOG] [33mSTT -> Deepgram connection closed[39m
+[2025-06-11T10:12:34.625Z] [LOG] [33mSTT -> Deepgram connection closed[39m
+[2025-06-11T10:14:22.328Z] [LOG] [33mSTT -> Deepgram connection closed[39m
+[2025-06-11T10:17:21.446Z] [LOG] [33mSTT -> Deepgram connection closed[39m
+[2025-06-11T10:18:06.155Z] [LOG] [33mSTT -> Deepgram connection closed[39m
+[2025-06-11T10:47:40.210Z] [LOG] [33mSTT -> Deepgram connection closed[39m
+[2025-06-11T12:02:48.036Z] [LOG] [33mSTT -> Deepgram connection closed[39m

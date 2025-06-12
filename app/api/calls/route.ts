@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       })
 
       // Group calls by phone number
-      const callsByPhone = activeCalls.reduce((acc, call) => {
+      const callsByPhone = activeCalls.reduce((acc: { [x: string]: any[] }, call: { phoneNumber: string | number }) => {
         if (!acc[call.phoneNumber]) {
           acc[call.phoneNumber] = []
         }

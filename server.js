@@ -3,7 +3,11 @@ const { parse } = require('url');
 const next = require('next');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
-const bodyParser = require('body-parser');
+const WebSocket = require('ws');
+const { createClient, LiveTranscriptionEvents } = require("@deepgram/sdk");
+const dotenv = require("dotenv");
+
+dotenv.config();
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = 'closemydeals.com';
@@ -17,7 +21,7 @@ app.prepare().then(() => {
     try {
       const parsedUrl = parse(req.url, true);
 
-      if (req.method === 'POST' && parsedUrl.pathname === '/twilio-stream') {
+      if (req.method === 'POST' && parsedUrl.pathname === '/api/twilio/stream-status') {
         let body = '';
         req.on('data', chunk => {
           body += chunk.toString();
@@ -25,23 +29,27 @@ app.prepare().then(() => {
 
         req.on('end', () => {
           const parsedBody = new URLSearchParams(body);
+          const streamSid = parsedBody.get('StreamSid');
           const callSid = parsedBody.get('CallSid');
-          const callStatus = parsedBody.get('CallStatus');
-          const from = parsedBody.get('From');
-          const to = parsedBody.get('To');
-
-          console.log(`Received call event: SID=${callSid}, Status=${callStatus}, From=${from}, To=${to}`);
-
-          io.emit('callEvent', { callSid, callStatus, from, to });
-
-          res.writeHead(200, { 'Content-Type': 'text/xml' });
-          res.end('<Response></Response>');
+          const streamStatus = parsedBody.get('StreamEvent');
+          console.log(`🔄 Stream Status: SID=${streamSid}, Call=${callSid}, Status=${streamStatus}`);
+          
+          // Emit stream status to connected clients
+          io.emit('streamStatus', { 
+            streamSid, 
+            callSid, 
+            status: streamStatus,
+            timestamp: new Date().toISOString()
+          });
+          
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ received: true }));
         });
       } else {
         await handle(req, res, parsedUrl);
       }
     } catch (err) {
-      console.error('Error occurred handling', req.url, err);
+      console.error('❌ Error occurred handling', req.url, err);
       res.statusCode = 500;
       res.end('internal server error');
     }
@@ -49,12 +57,10 @@ app.prepare().then(() => {
 
   const io = new Server(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === 'production' 
-        ? process.env.NEXT_PUBLIC_SITE_URL
-        : ['http://localhost:3000'],
+      origin: dev ? 'http://localhost:3000' : process.env.NEXT_PUBLIC_SITE_URL,
       methods: ['GET', 'POST'],
-      credentials: true
-    }
+      credentials: true,
+    },
   });
 
   io.use((socket, next) => {
@@ -73,35 +79,292 @@ app.prepare().then(() => {
   });
 
   io.on('connection', (socket) => {
-    console.log(`🟢 User ${socket.userId} connected`);
+    console.log(`🔗 Socket.IO client connected: ${socket.id}`);
 
     socket.on('disconnect', () => {
-      console.log(`🔴 User ${socket.userId} disconnected`);
+      console.log(`🔌 Socket.IO client disconnected: ${socket.id}`);
     });
 
-    socket.on('requestTranscriptions', async (callSid) => {
-      try {
-        const { TranscriptionService } = await import('./lib/transcription-service.js');
-        const transcriptionService = new TranscriptionService();
-        const transcriptions = await transcriptionService.getTranscriptions(callSid);
-        socket.emit('transcriptionsData', { callSid, transcriptions });
-      } catch (error) {
-        console.error('Error fetching transcriptions:', error);
-        socket.emit('transcriptionsError', { callSid, error: error.message });
+    // Allow clients to join specific call rooms for targeted updates
+    socket.on('joinCallRoom', (callSid) => {
+      socket.join(`call_${callSid}`);
+      console.log(`📞 Socket ${socket.id} joined room for call ${callSid}`);
+    });
+
+    socket.on('leaveCallRoom', (callSid) => {
+      socket.leave(`call_${callSid}`);
+      console.log(`📞 Socket ${socket.id} left room for call ${callSid}`);
+    });
+  });
+
+  const wss = new WebSocket.Server({
+    server: httpServer,
+    path: '/api/twilio/media-stream',
+  });
+
+  const activeConnections = new Map();
+  const activeStreams = new Map(); // Track active streams by callSid
+
+  wss.on('connection', (ws) => {
+    console.log('📞 Twilio Media Stream connected');
+
+    let callSid = null;
+    let deepgramConnection = null;
+    let streamSid = null;
+
+    ws.on('message', (data) => {
+      const message = JSON.parse(data.toString());
+
+      switch (message.event) {
+        case 'start':
+          callSid = message.start.callSid;
+          streamSid = message.start.streamSid;
+          console.log(`🔗 Media stream started for call: ${callSid}, stream: ${streamSid}`);
+          
+          const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
+          
+          deepgramConnection = deepgram.listen.live({
+            model: "nova-2",
+            language: "en-US",
+            smart_format: true,
+            encoding: "mulaw",
+            channels: 1,
+            sample_rate: 8000,
+            interim_results: true,
+            utterance_end_ms: "1000",
+            vad_events: true,
+            endpointing: 300,
+            punctuate: true,
+            profanity_filter: false,
+            redact: false,
+            diarize: false,
+            multichannel: false,
+            alternatives: 1,
+            numerals: true
+          });
+
+          activeConnections.set(ws, deepgramConnection);
+          activeStreams.set(callSid, { 
+            ws, 
+            deepgramConnection, 
+            streamSid,
+            startTime: new Date().toISOString()
+          });
+
+          deepgramConnection.on(LiveTranscriptionEvents.Open, () => {
+            console.log(`🎙️ Deepgram connection opened for call ${callSid}`);
+            
+            // Notify clients that transcription is ready
+            io.emit('transcriptionReady', { 
+              callSid, 
+              streamSid,
+              timestamp: new Date().toISOString()
+            });
+            
+            // Also notify specific call room
+            io.to(`call_${callSid}`).emit('transcriptionReady', { 
+              callSid, 
+              streamSid,
+              timestamp: new Date().toISOString()
+            });
+          });
+
+          deepgramConnection.on(LiveTranscriptionEvents.Close, () => {
+            console.log(`🎙️ Deepgram connection closed for call ${callSid}`);
+            
+            // Notify clients that transcription has ended
+            io.emit('transcriptionEnded', { 
+              callSid, 
+              streamSid,
+              timestamp: new Date().toISOString()
+            });
+            
+            io.to(`call_${callSid}`).emit('transcriptionEnded', { 
+              callSid, 
+              streamSid,
+              timestamp: new Date().toISOString()
+            });
+          });
+
+          deepgramConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
+            const transcript = data.channel.alternatives[0].transcript;
+            const isInterim = data.is_final === false;
+            const confidence = data.channel.alternatives[0].confidence;
+            
+            if (transcript && transcript.trim().length > 0) {
+              const transcriptData = { 
+                callSid, 
+                streamSid,
+                text: transcript,
+                type: isInterim ? 'interim' : 'final',
+                confidence: confidence || 0,
+                timestamp: new Date().toISOString(),
+                words: data.channel.alternatives[0].words || []
+              };
+
+              if (!isInterim) {
+                console.log(`🎙️ Final Transcript [${callSid}]:`, transcript);
+              }
+              
+              // Emit to all clients
+              io.emit('liveTranscript', transcriptData);
+              
+              // Also emit to specific call room
+              io.to(`call_${callSid}`).emit('liveTranscript', transcriptData);
+            }
+          });
+
+          deepgramConnection.on(LiveTranscriptionEvents.UtteranceEnd, (data) => {
+            const utteranceData = { 
+              callSid, 
+              streamSid,
+              timestamp: new Date().toISOString()
+            };
+            
+            console.log(`🎙️ Utterance end for call ${callSid}`);
+            io.emit('utteranceEnd', utteranceData);
+            io.to(`call_${callSid}`).emit('utteranceEnd', utteranceData);
+          });
+
+          deepgramConnection.on(LiveTranscriptionEvents.SpeechStarted, (data) => {
+            const speechData = { 
+              callSid, 
+              streamSid,
+              timestamp: new Date().toISOString()
+            };
+            
+            console.log(`🎙️ Speech started for call ${callSid}`);
+            io.emit('speechStarted', speechData);
+            io.to(`call_${callSid}`).emit('speechStarted', speechData);
+          });
+
+          deepgramConnection.on(LiveTranscriptionEvents.Metadata, (data) => {
+            console.log(`🎙️ Deepgram metadata for call ${callSid}:`, data);
+          });
+
+          deepgramConnection.on(LiveTranscriptionEvents.Error, (err) => {
+            console.error(`❌ Deepgram error for call ${callSid}:`, err);
+            
+            const errorData = { 
+              callSid, 
+              streamSid,
+              error: err.message,
+              timestamp: new Date().toISOString()
+            };
+            
+            io.emit('transcriptionError', errorData);
+            io.to(`call_${callSid}`).emit('transcriptionError', errorData);
+          });
+
+          break;
+
+        case 'media':
+          if (deepgramConnection && deepgramConnection.getReadyState() === 1) {
+            try {
+              const audioBuffer = Buffer.from(message.media.payload, 'base64');
+              deepgramConnection.send(audioBuffer);
+            } catch (error) {
+              console.error(`❌ Error sending audio to Deepgram for call ${callSid}:`, error);
+            }
+          }
+          break;
+
+        case 'stop':
+          console.log(`🛑 Media stream stopped for call: ${callSid}`);
+          if (deepgramConnection) {
+            try {
+              deepgramConnection.finish();
+            } catch (error) {
+              console.error(`❌ Error finishing Deepgram connection for call ${callSid}:`, error);
+            }
+            activeConnections.delete(ws);
+            activeStreams.delete(callSid);
+            deepgramConnection = null;
+          }
+          break;
+
+        default:
+          console.log('Unknown message event:', message.event);
+          break;
+      }
+    });
+
+    ws.on('close', () => {
+      console.log(`📞 Media stream connection closed for call: ${callSid}`);
+      if (deepgramConnection) {
+        try {
+          deepgramConnection.finish();
+        } catch (error) {
+          console.error(`❌ Error closing Deepgram connection for call ${callSid}:`, error);
+        }
+        activeConnections.delete(ws);
+        if (callSid) {
+          activeStreams.delete(callSid);
+        }
+        deepgramConnection = null;
+      }
+    });
+
+    ws.on('error', (error) => {
+      console.error(`❌ Media stream WebSocket error for call ${callSid}:`, error);
+      if (deepgramConnection) {
+        try {
+          deepgramConnection.finish();
+        } catch (error) {
+          console.error(`❌ Error closing Deepgram connection on error for call ${callSid}:`, error);
+        }
+        activeConnections.delete(ws);
+        if (callSid) {
+          activeStreams.delete(callSid);
+        }
+        deepgramConnection = null;
       }
     });
   });
 
-  global.io = io;
-
-  httpServer
-    .once('error', (err) => {
-      console.error(err);
-      process.exit(1);
-    })
-    .listen(port, () => {
-      console.log(`🚀 Ready on http://${hostname}:${port}`);
-      console.log('📡 Socket.IO server is running');
-      console.log('📞 Real-time Twilio call monitoring active');
+  // Graceful shutdown
+  process.on('SIGINT', () => {
+    console.log('🛑 Shutting down gracefully...');
+    
+    // Close all active Deepgram connections
+    for (const [ws, deepgramConnection] of activeConnections) {
+      try {
+        deepgramConnection.finish();
+      } catch (error) {
+        console.error('❌ Error closing Deepgram connection during shutdown:', error);
+      }
+    }
+    
+    activeConnections.clear();
+    activeStreams.clear();
+    
+    httpServer.close(() => {
+      console.log('✅ Server closed');
+      process.exit(0);
     });
+  });
+
+  // Health check endpoint for active streams
+  httpServer.on('request', (req, res) => {
+    const parsedUrl = parse(req.url, true);
+    
+    if (req.method === 'GET' && parsedUrl.pathname === '/api/health/streams') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        activeStreams: activeStreams.size,
+        streams: Array.from(activeStreams.keys()),
+        timestamp: new Date().toISOString()
+      }));
+      return;
+    }
+  });
+
+  httpServer.listen(port, () => {
+    console.log(`🚀 Ready on http://${hostname}`);
+    console.log('📡 Socket.IO server is running');
+    console.log('📞 Real-time Twilio call monitoring active');
+    console.log('🎵 Twilio Media Streams WebSocket server is running on /api/twilio/media-stream');
+    console.log('🎙️ Real-time Deepgram transcription enabled');
+    console.log('🏥 Health check available at /api/health/streams');
+  });
 });

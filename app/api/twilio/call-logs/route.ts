@@ -1,15 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server'
-import twilio from 'twilio'
+import { NextRequest, NextResponse } from 'next/server';
+import twilio, { Twilio } from 'twilio';
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID
-const authToken = process.env.TWILIO_AUTH_TOKEN
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
 
-export async function GET(request: NextRequest) {
+if (!accountSid || !authToken) {
+  throw new Error('Twilio account SID and auth token must be set');
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const client = twilio(accountSid, authToken)
+    const client: Twilio = twilio(accountSid, authToken);
 
     const { searchParams } = new URL(request.url);
-    const phoneNumber = searchParams.get('phone-number');
+    const phoneNumber: string | null = searchParams.get('phone-number');
 
     if (!phoneNumber) {
       return NextResponse.json(
@@ -50,10 +54,10 @@ export async function GET(request: NextRequest) {
     ];
 
     const uniqueCalls = allCalls.filter((call, index, self) =>
-      index === self.findIndex(c => c.sid === call.sid)
+      index === self.findIndex((c) => c.sid === call.sid)
     );
 
-    const formattedCalls = uniqueCalls.map(call => ({
+    const formattedCalls = uniqueCalls.map((call) => ({
       sid: call.sid,
       from: call.from,
       to: call.to,
@@ -65,8 +69,12 @@ export async function GET(request: NextRequest) {
       priceUnit: call.priceUnit
     }));
 
-    const inProgress = formattedCalls.filter(call => call.status === 'in-progress');
-    const ringing = formattedCalls.filter(call => call.status === 'ringing');
+    const inProgress = formattedCalls.filter(
+      (call) => call.status === 'in-progress'
+    );
+    const ringing = formattedCalls.filter(
+      (call) => call.status === 'ringing'
+    );
 
     return NextResponse.json({
       phoneNumber,
@@ -84,7 +92,7 @@ export async function GET(request: NextRequest) {
       status: 200
     });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Error in call-logs endpoint:', error);
     return NextResponse.json(
       { error: 'Internal Server Error' },
