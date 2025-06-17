@@ -40,9 +40,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const stream = await client.calls(callSid).streams.create({
       url: `wss://${baseURL.replace('https://', '').replace('http://', '')}/api/twilio/media-stream`,
       track: 'both_tracks',
-      name: `stream_${Date.now()}`,
+      name: `enhanced_stream_${Date.now()}`,
       statusCallback: `${baseURL}/api/twilio/stream-status`,
       statusCallbackMethod: 'POST',
+      "parameter1.name": 'enable_speaker_separation',
+      "parameter1.value": 'true',
+      "parameter2.name": 'track_participants',
+      "parameter2.value": 'both'
     });
 
     const callDetails: CallDetails = {
@@ -57,18 +61,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       streamSid: stream.sid,
       streamName: stream.name,
       streamingEnabled: true,
+      features: {
+        speakerIdentification: true,
+        sentenceBuilding: true,
+        dualTrackProcessing: true,
+        realTimeTranscription: true
+      },
       audioCapture: {
         bothSides: true,
+        separateTracks: true,
         transparent: true,
-        explanation: "Media stream silently captures both participants without disrupting the call",
+        explanation: "Media stream captures both participants on separate tracks for speaker identification",
       },
       callDetails,
     }, { status: 200 });
 
   } catch (error) {
-    console.error('Error starting stream on call:', error);
+    console.error('Error starting enhanced stream on call:', error);
     return NextResponse.json({
-      error: 'Failed to start stream on call',
+      error: 'Failed to start enhanced stream on call',
       details: (error as Error).message,
     }, { status: 500 });
   }
@@ -92,13 +103,17 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
       success: true,
       streamSid: stream.sid,
       status: stream.status,
-      message: 'Media stream stopped successfully'
+      message: 'Enhanced media stream stopped successfully',
+      cleanup: {
+        sentenceBuilders: 'cleared',
+        speakerData: 'finalized'
+      }
     }, { status: 200 });
 
   } catch (error) {
-    console.error('Error stopping stream:', error);
+    console.error('Error stopping enhanced stream:', error);
     return NextResponse.json({
-      error: 'Failed to stop stream',
+      error: 'Failed to stop enhanced stream',
       details: (error as Error).message,
     }, { status: 500 });
   }

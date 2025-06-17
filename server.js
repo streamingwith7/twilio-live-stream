@@ -21,6 +21,17 @@ app.prepare().then(() => {
     try {
       const parsedUrl = parse(req.url, true);
 
+      res.setHeader('Access-Control-Allow-Origin', dev ? 'http://localhost:3000' : 'https://closemydeals.com');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+
       if (req.method === 'POST' && parsedUrl.pathname === '/api/twilio/stream-status') {
         let body = '';
         req.on('data', chunk => {
@@ -56,10 +67,17 @@ app.prepare().then(() => {
 
   const io = new Server(httpServer, {
     cors: {
-      origin: dev ? 'http://localhost:3000' : process.env.NEXT_PUBLIC_SITE_URL,
+      origin: dev ? 'http://localhost:3000' : ['https://closemydeals.com', process.env.NEXT_PUBLIC_SITE_URL],
       methods: ['GET', 'POST'],
       credentials: true,
+      allowedHeaders: ['Content-Type', 'Authorization']
     },
+    transports: ['polling', 'websocket'],
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    upgradeTimeout: 30000,
+    maxHttpBufferSize: 1e6
   });
 
   io.use((socket, next) => {
@@ -80,18 +98,45 @@ app.prepare().then(() => {
   io.on('connection', (socket) => {
     console.log(`🔗 Socket.IO client connected: ${socket.id}`);
 
-    socket.on('disconnect', () => {
-      console.log(`🔌 Socket.IO client disconnected: ${socket.id}`);
+    socket.on('disconnect', (reason) => {
+      console.log(`🔌 Socket.IO client disconnected: ${socket.id}, reason: ${reason}`);
+      
+      if (reason === 'client namespace disconnect' || reason === 'server namespace disconnect') {
+        console.log('⚠️ Namespace disconnect, attempting cleanup...');
+      }
+      
+      if (reason === 'transport close' || reason === 'transport error') {
+        console.log('🔄 Transport issue, client should reconnect automatically');
+      }
     });
 
     socket.on('joinCallRoom', (callSid) => {
       socket.join(`call_${callSid}`);
       console.log(`📞 Socket ${socket.id} joined room for call ${callSid}`);
+      socket.callSid = callSid;
+      
+      socket.emit('roomJoined', { 
+        callSid, 
+        socketId: socket.id,
+        timestamp: new Date().toISOString()
+      });
     });
 
     socket.on('leaveCallRoom', (callSid) => {
       socket.leave(`call_${callSid}`);
       console.log(`📞 Socket ${socket.id} left room for call ${callSid}`);
+      delete socket.callSid;
+    });
+
+    socket.on('heartbeat', (data) => {
+      socket.emit('heartbeatAck', { 
+        timestamp: new Date().toISOString(),
+        socketId: socket.id 
+      });
+    });
+
+    socket.on('error', (error) => {
+      console.error(`❌ Socket error for ${socket.id}:`, error);
     });
   });
 
@@ -102,6 +147,7 @@ app.prepare().then(() => {
 
   const activeConnections = new Map();
   const activeStreams = new Map();
+  const sentenceBuilders = new Map();
 
   wss.on('connection', (ws) => {
     console.log('📞 Twilio Media Stream connected');
@@ -119,26 +165,38 @@ app.prepare().then(() => {
           streamSid = message.start.streamSid;
           console.log(`🔗 Media stream started for call: ${callSid}, stream: ${streamSid}`);
 
+          sentenceBuilders.set(callSid, {
+            inbound: { 
+              text: '', 
+              confidence: 0, 
+              words: [], 
+              lastUpdateTime: Date.now(),
+              pendingText: ''
+            }
+          });
+
           const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 
           deepgramConnection = deepgram.listen.live({
-            model: "nova-2",
+            model: "nova-3",
             language: "en-US",
             smart_format: true,
             encoding: "mulaw",
             channels: 1,
             sample_rate: 8000,
             interim_results: true,
-            utterance_end_ms: "1000",
+            utterance_end_ms: "3000",
             vad_events: true,
-            endpointing: 300,
+            endpointing: 1000,
             punctuate: true,
             profanity_filter: false,
             redact: false,
             diarize: false,
             multichannel: false,
             alternatives: 1,
-            numerals: true
+            numerals: true,
+            filler_words: false,
+            no_delay: false
           });
 
           activeConnections.set(ws, deepgramConnection);
@@ -162,6 +220,24 @@ app.prepare().then(() => {
           deepgramConnection.on(LiveTranscriptionEvents.Close, () => {
             console.log(`🎙️ Deepgram connection closed for call ${callSid}`);
 
+            const builders = sentenceBuilders.get(callSid);
+            if (builders) {
+              ['inbound', 'outbound'].forEach(speaker => {
+                if (builders[speaker].text.trim()) {
+                  const completeSentence = {
+                    id: `${callSid}_${speaker}_${Date.now()}`,
+                    text: builders[speaker].text.trim(),
+                    speaker,
+                    timestamp: new Date().toISOString(),
+                    confidence: builders[speaker].confidence
+                  };
+
+                  io.to(`call_${callSid}`).emit('completeSentence', completeSentence);
+                }
+              });
+              sentenceBuilders.delete(callSid);
+            }
+
             io.to(`call_${callSid}`).emit('transcriptionEnded', {
               callSid,
               streamSid,
@@ -170,37 +246,85 @@ app.prepare().then(() => {
           });
 
           deepgramConnection.on(LiveTranscriptionEvents.Transcript, (data) => {
+            if (!data.channel || !data.channel.alternatives || !data.channel.alternatives[0]) {
+              return;
+            }
+
             const transcript = data.channel.alternatives[0].transcript;
             const isInterim = data.is_final === false;
-            const confidence = data.channel.alternatives[0].confidence;
+            const confidence = data.channel.alternatives[0].confidence || 0;
+            
+            const track = 'inbound_track';
+            const speaker = 'inbound';
 
             if (transcript && transcript.trim().length > 0) {
-              const transcriptData = {
-                callSid,
-                streamSid,
-                text: transcript,
-                type: isInterim ? 'interim' : 'final',
-                confidence: confidence || 0,
-                timestamp: new Date().toISOString(),
-                words: data.channel.alternatives[0].words || []
-              };
+              const builders = sentenceBuilders.get(callSid);
+              if (!builders) return;
 
-              if (!isInterim) {
-                console.log(`🎙️ Final Transcript [${callSid}]:`, transcript);
+              if (isInterim) {
+                builders[speaker].pendingText = transcript;
+                builders[speaker].lastUpdateTime = Date.now();
+
+                const transcriptData = {
+                  callSid,
+                  streamSid,
+                  text: transcript,
+                  type: 'interim',
+                  confidence: confidence,
+                  timestamp: new Date().toISOString(),
+                  speaker,
+                  track,
+                  words: data.channel.alternatives[0].words || []
+                };
+
+                io.to(`call_${callSid}`).emit('liveTranscript', transcriptData);
+              } else {
+                if (builders[speaker].text.trim()) {
+                  builders[speaker].text += ' ' + transcript;
+                } else {
+                  builders[speaker].text = transcript;
+                }
+                builders[speaker].confidence = Math.max(builders[speaker].confidence, confidence);
+                builders[speaker].pendingText = '';
+
+                console.log(`🎙️ Final Transcript Added [${callSid}]:`, transcript);
+                console.log(`🎙️ Current Accumulated Text:`, builders[speaker].text);
               }
-
-              io.to(`call_${callSid}`).emit('liveTranscript', transcriptData);
             }
           });
 
           deepgramConnection.on(LiveTranscriptionEvents.UtteranceEnd, (data) => {
+            console.log(`🎙️ Utterance end for call ${callSid}`);
+            
+            const builders = sentenceBuilders.get(callSid);
+            if (builders && builders.inbound.text.trim()) {
+              const completeSentence = {
+                id: `${callSid}_inbound_${Date.now()}_${Math.random()}`,
+                text: builders.inbound.text.trim(),
+                speaker: 'inbound',
+                timestamp: new Date().toISOString(),
+                confidence: builders.inbound.confidence
+              };
+
+              console.log(`🎙️ Complete Sentence Emitted [${callSid}]:`, completeSentence.text);
+              io.to(`call_${callSid}`).emit('completeSentence', completeSentence);
+
+              builders.inbound = { 
+                text: '', 
+                confidence: 0, 
+                words: [], 
+                lastUpdateTime: Date.now(),
+                pendingText: ''
+              };
+            }
+            
             const utteranceData = {
               callSid,
               streamSid,
+              speaker: 'inbound',
               timestamp: new Date().toISOString()
             };
 
-            console.log(`🎙️ Utterance end for call ${callSid}`);
             io.to(`call_${callSid}`).emit('utteranceEnd', utteranceData);
           });
 
@@ -238,7 +362,6 @@ app.prepare().then(() => {
           if (deepgramConnection && deepgramConnection.getReadyState() === 1) {
             try {
               const { track, payload } = message.media;
-              console.log('track', track);
               const audioBuffer = Buffer.from(payload, 'base64');
               deepgramConnection.send(audioBuffer);
             } catch (error) {
@@ -249,6 +372,24 @@ app.prepare().then(() => {
 
         case 'stop':
           console.log(`🛑 Media stream stopped for call: ${callSid}`);
+          
+          const builders = sentenceBuilders.get(callSid);
+          if (builders) {
+            ['inbound', 'outbound'].forEach(speaker => {
+              if (builders[speaker].text.trim()) {
+                const completeSentence = {
+                  id: `${callSid}_${speaker}_${Date.now()}`,
+                  text: builders[speaker].text.trim(),
+                  speaker,
+                  timestamp: new Date().toISOString(),
+                  confidence: builders[speaker].confidence
+                };
+
+                io.to(`call_${callSid}`).emit('completeSentence', completeSentence);
+              }
+            });
+            sentenceBuilders.delete(callSid);
+          }
           
           if (deepgramConnection) {
             try {
@@ -271,6 +412,24 @@ app.prepare().then(() => {
     ws.on('close', () => {
       console.log(`📞 Media stream connection closed for call: ${callSid}`);
       
+      const builders = sentenceBuilders.get(callSid);
+      if (builders) {
+        ['inbound', 'outbound'].forEach(speaker => {
+          if (builders[speaker].text.trim()) {
+            const completeSentence = {
+              id: `${callSid}_${speaker}_${Date.now()}`,
+              text: builders[speaker].text.trim(),
+              speaker,
+              timestamp: new Date().toISOString(),
+              confidence: builders[speaker].confidence
+            };
+
+            io.to(`call_${callSid}`).emit('completeSentence', completeSentence);
+          }
+        });
+        sentenceBuilders.delete(callSid);
+      }
+      
       if (deepgramConnection) {
         try {
           deepgramConnection.finish();
@@ -287,6 +446,24 @@ app.prepare().then(() => {
 
     ws.on('error', (error) => {
       console.error(`❌ Media stream WebSocket error for call ${callSid}:`, error);
+      
+      const builders = sentenceBuilders.get(callSid);
+      if (builders) {
+        ['inbound', 'outbound'].forEach(speaker => {
+          if (builders[speaker].text.trim()) {
+            const completeSentence = {
+              id: `${callSid}_${speaker}_${Date.now()}`,
+              text: builders[speaker].text.trim(),
+              speaker,
+              timestamp: new Date().toISOString(),
+              confidence: builders[speaker].confidence
+            };
+
+            io.to(`call_${callSid}`).emit('completeSentence', completeSentence);
+          }
+        });
+        sentenceBuilders.delete(callSid);
+      }
       
       if (deepgramConnection) {
         try {
@@ -310,6 +487,7 @@ app.prepare().then(() => {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         activeStreams: activeStreams.size,
+        activeSentenceBuilders: sentenceBuilders.size,
         streams: Array.from(activeStreams.keys()),
         timestamp: new Date().toISOString()
       }));
@@ -322,7 +500,8 @@ app.prepare().then(() => {
     console.log('📡 Socket.IO server is running');
     console.log('📞 Real-time Twilio call monitoring active');
     console.log('🎵 Twilio Media Streams WebSocket server is running on /api/twilio/media-stream');
-    console.log('🎙️ Real-time Deepgram transcription enabled');
+    console.log('🎙️ Real-time Deepgram transcription with speaker identification enabled');
+    console.log('🗣️ Sentence building and speaker separation active');
     console.log('🏥 Health check available at /api/health/streams');
   });
 });

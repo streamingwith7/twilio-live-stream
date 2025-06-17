@@ -13,6 +13,17 @@ interface TranscriptMessage {
   text: string
   type: 'interim' | 'final'
   timestamp: string
+  speaker: 'inbound' | 'outbound'
+  track: 'inbound_track' | 'outbound_track'
+  confidence?: number
+}
+
+interface CompleteSentence {
+  id: string
+  text: string
+  speaker: 'inbound' | 'outbound'
+  timestamp: string
+  confidence: number
 }
 
 interface CallDetails {
@@ -35,13 +46,17 @@ export default function TranscriptionPage() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [socket, setSocket] = useState<Socket | null>(null)
-  const [transcripts, setTranscripts] = useState<TranscriptMessage[]>([])
-  const [currentInterim, setCurrentInterim] = useState<string>('')
+  const [completeSentences, setCompleteSentences] = useState<CompleteSentence[]>([])
+  const [currentSpeakers, setCurrentSpeakers] = useState<{
+    inbound: string
+  }>({ inbound: '' })
   const [streamActive, setStreamActive] = useState(false)
   const [streamError, setStreamError] = useState('')
   const [callDetails, setCallDetails] = useState<CallDetails | null>(null)
   const [streamSid, setStreamSid] = useState<string | null>(null)
   const [isStartingStream, setIsStartingStream] = useState(false)
+  const [socketStatus, setSocketStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('connecting')
+  const [heartbeatInterval, setHeartbeatInterval] = useState<NodeJS.Timeout | null>(null)
   const [isStoppingStream, setIsStoppingStream] = useState(false)
 
   const router = useRouter()
@@ -72,8 +87,8 @@ export default function TranscriptionPage() {
         setStreamActive(true)
         setCallDetails(data.callDetails)
         setStreamSid(data.streamSid)
-        setTranscripts([]) // Clear previous transcripts
-        setCurrentInterim('')
+        setCompleteSentences([])
+        setCurrentSpeakers({ inbound: '' })
       } else {
         setStreamError(data.error || 'Failed to start transcription')
       }
@@ -102,24 +117,84 @@ export default function TranscriptionPage() {
     setUser(JSON.parse(userData))
     setLoading(false)
 
-    // Initialize Socket.IO connection
     const newSocket = io({
       auth: {
         token: token
-      }
+      },
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      rememberUpgrade: false,
+      timeout: 30000,
+      reconnection: true,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 10000,
+      reconnectionAttempts: 10,
+      autoConnect: true,
+      forceNew: false
     })
 
     newSocket.on('connect', () => {
-      console.log('Connected to WebSocket server')
-      // Join the specific call room for targeted updates
+      console.log('✅ Socket.IO Connected successfully')
+      console.log('Transport used:', newSocket.io.engine.transport.name)
+      setSocketStatus('connected')
+      
       newSocket.emit('joinCallRoom', callSid)
-
-      // Auto-start transcription when connected
-      startTranscription()
+      
+      const interval = setInterval(() => {
+        if (newSocket.connected) {
+          newSocket.emit('heartbeat', { timestamp: Date.now() })
+        }
+      }, 10000)
+      setHeartbeatInterval(interval)
+      
+      if (!streamActive && !isStartingStream) {
+        setTimeout(() => {
+          startTranscription()
+        }, 1000)
+      }
     })
 
-    newSocket.on('disconnect', () => {
-      console.log('Disconnected from WebSocket server')
+    newSocket.on('disconnect', (reason) => {
+      console.log('❌ Socket.IO Disconnected:', reason)
+      setSocketStatus('disconnected')
+      
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval)
+        setHeartbeatInterval(null)
+      }
+      
+      if (reason === 'io server disconnect') {
+        console.log('🔄 Server initiated disconnect, reconnecting...')
+        newSocket.connect()
+      }
+    })
+
+    newSocket.on('reconnect_attempt', (attemptNumber) => {
+      console.log('🔄 Socket.IO Reconnection attempt:', attemptNumber)
+      setSocketStatus('reconnecting')
+    })
+
+    newSocket.on('reconnect', (attemptNumber) => {
+      console.log('🔄 Socket.IO Reconnected after', attemptNumber, 'attempts')
+      setSocketStatus('connected')
+      newSocket.emit('joinCallRoom', callSid)
+      
+      if (streamActive) {
+        console.log('🎙️ Reconnected during active stream, rejoining...')
+      }
+    })
+
+    newSocket.on('connect_error', (error) => {
+      console.log('💥 Socket.IO Connection error:', error.message)
+      setSocketStatus('disconnected')
+    })
+
+    newSocket.on('roomJoined', (data) => {
+      console.log('✅ Successfully joined call room:', data)
+    })
+
+    newSocket.on('heartbeatAck', (data) => {
+      console.log('💓 Heartbeat acknowledged:', data.timestamp)
     })
 
     newSocket.on('transcriptionReady', (data: { callSid: string; streamSid: string; timestamp: string }) => {
@@ -139,18 +214,43 @@ export default function TranscriptionPage() {
 
     newSocket.on('liveTranscript', (data: TranscriptMessage) => {
       if (data.callSid === callSid) {
+        console.log('Received transcript:', data)
+        const speaker = data.speaker || 'inbound'
+        
         if (data.type === 'interim') {
-          setCurrentInterim(data.text)
-        } else {
-          setTranscripts(prev => [...prev, data])
-          setCurrentInterim('')
+          setCurrentSpeakers(prev => ({
+            ...prev,
+            [speaker]: data.text
+          }))
         }
       }
     })
 
-    newSocket.on('utteranceEnd', (data: { callSid: string; streamSid: string; timestamp: string }) => {
+    newSocket.on('completeSentence', (data: CompleteSentence) => {
+      console.log('✅ Received complete sentence:', data)
+      if (data.id.includes(callSid)) {
+        setCompleteSentences(prev => {
+          const exists = prev.find(s => s.id === data.id)
+          if (exists) {
+            console.log('⚠️ Duplicate sentence ignored:', data.id)
+            return prev
+          }
+          console.log('➕ Adding new sentence to UI')
+          return [...prev, data]
+        })
+        setCurrentSpeakers(prev => ({
+          ...prev,
+          [data.speaker]: ''
+        }))
+      }
+    })
+
+    newSocket.on('utteranceEnd', (data: { callSid: string; streamSid: string; timestamp: string; speaker: 'inbound' | 'outbound' }) => {
       if (data.callSid === callSid) {
-        setCurrentInterim('')
+        setCurrentSpeakers(prev => ({
+          ...prev,
+          [data.speaker]: ''
+        }))
       }
     })
 
@@ -180,6 +280,9 @@ export default function TranscriptionPage() {
     setSocket(newSocket)
 
     return () => {
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval)
+      }
       if (callSid) {
         newSocket.emit('leaveCallRoom', callSid)
       }
@@ -220,6 +323,9 @@ export default function TranscriptionPage() {
   }
 
   const handleLogout = () => {
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval)
+    }
     if (socket) {
       socket.disconnect()
     }
@@ -233,10 +339,10 @@ export default function TranscriptionPage() {
   }
 
   const downloadTranscript = () => {
-    if (transcripts.length === 0) return
+    if (completeSentences.length === 0) return
 
-    const transcriptText = transcripts
-      .map(t => `[${formatTimestamp(t.timestamp)}] ${t.text}`)
+    const transcriptText = completeSentences
+      .map(t => `[${formatTimestamp(t.timestamp)}] ${t.speaker === 'inbound' ? 'Caller' : 'Agent'}: ${t.text}`)
       .join('\n')
 
     const blob = new Blob([transcriptText], { type: 'text/plain' })
@@ -251,8 +357,16 @@ export default function TranscriptionPage() {
   }
 
   const clearTranscripts = () => {
-    setTranscripts([])
-    setCurrentInterim('')
+    setCompleteSentences([])
+    setCurrentSpeakers({ inbound: '' })
+  }
+
+  const getSpeakerLabel = (speaker: 'inbound' | 'outbound') => {
+    return 'Speaker'
+  }
+
+  const getSpeakerColor = (speaker: 'inbound' | 'outbound') => {
+    return 'bg-blue-100 text-blue-800'
   }
 
   if (loading) {
@@ -265,7 +379,6 @@ export default function TranscriptionPage() {
 
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
-          {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div>
@@ -308,7 +421,7 @@ export default function TranscriptionPage() {
                   </button>
                 )}
 
-                {transcripts.length > 0 && (
+                {completeSentences.length > 0 && (
                   <>
                     <button
                       onClick={downloadTranscript}
@@ -335,13 +448,18 @@ export default function TranscriptionPage() {
             </div>
           </div>
 
-          {/* Connection Status */}
           <div className="mb-6">
             <div className="flex items-center space-x-6">
               <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${socket?.connected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                <div className={`w-3 h-3 rounded-full ${
+                  socketStatus === 'connected' ? 'bg-green-500' : 
+                  socketStatus === 'reconnecting' ? 'bg-yellow-500 animate-pulse' : 
+                  'bg-red-500'
+                }`}></div>
                 <span className="text-sm text-gray-600">
-                  {socket?.connected ? 'WebSocket Connected' : 'Connecting...'}
+                  {socketStatus === 'connected' ? `Connected (${socket?.io?.engine?.transport?.name || 'unknown'})` : 
+                   socketStatus === 'reconnecting' ? 'Reconnecting...' :
+                   socketStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
                 </span>
               </div>
               <div className="flex items-center space-x-2">
@@ -350,23 +468,30 @@ export default function TranscriptionPage() {
                   {streamActive ? 'Transcription Active' : isStartingStream ? 'Starting Transcription...' : 'Transcription Inactive'}
                 </span>
               </div>
+              {socketStatus === 'reconnecting' && (
+                <div className="flex items-center space-x-2">
+                  <svg className="w-4 h-4 text-yellow-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span className="text-sm text-yellow-600">Reconnecting...</span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Error State */}
           {streamError && (
             <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
               {streamError}
             </div>
           )}
 
-          {/* Transcription Container */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">Live Transcription</h3>
                 <div className="flex items-center space-x-4 text-sm text-gray-600">
-                  <span>Total messages: {transcripts.length}</span>
+                  <span>Complete sentences: {completeSentences.length}</span>
+                  <span>Last update: {completeSentences.length > 0 ? formatTimestamp(completeSentences[completeSentences.length - 1].timestamp) : 'None'}</span>
                   {streamActive && (
                     <div className="flex items-center">
                       <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
@@ -378,7 +503,7 @@ export default function TranscriptionPage() {
             </div>
 
             <div className="p-6">
-              {!streamActive && !isStartingStream && transcripts.length === 0 && (
+              {!streamActive && !isStartingStream && completeSentences.length === 0 && (
                 <div className="text-center py-16">
                   <svg className="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -390,44 +515,48 @@ export default function TranscriptionPage() {
                 </div>
               )}
 
-              {(streamActive || transcripts.length > 0) && (
+              {(streamActive || completeSentences.length > 0) && (
                 <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {transcripts.map((transcript, index) => (
-                    <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                  {completeSentences.map((sentence) => (
+                    <div key={sentence.id} className="flex items-start space-x-3 p-4 bg-gray-50 rounded-lg">
                       <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                          <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-1.586l-4.707 4.707z" />
-                          </svg>
-                        </div>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getSpeakerColor(sentence.speaker)}`}>
+                          {getSpeakerLabel(sentence.speaker)}
+                        </span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900">{transcript.text}</p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {formatTimestamp(transcript.timestamp)}
-                        </p>
+                        <p className="text-sm text-gray-900">{sentence.text}</p>
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-xs text-gray-500">
+                            {formatTimestamp(sentence.timestamp)}
+                          </p>
+                          <p className="text-xs text-gray-400">
+                            Confidence: {Math.round(sentence.confidence * 100)}%
+                          </p>
+                        </div>
                       </div>
                     </div>
                   ))}
 
-                  {/* Current interim transcript */}
-                  {currentInterim && streamActive && (
-                    <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-400">
-                      <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                          <svg className="w-4 h-4 text-yellow-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                          </svg>
+                  {(currentSpeakers.inbound) && streamActive && (
+                    <div className="space-y-2">
+                      {currentSpeakers.inbound && (
+                        <div className="flex items-start space-x-3 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400">
+                          <div className="flex-shrink-0">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              Speaker
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-900 italic">{currentSpeakers.inbound}</p>
+                            <p className="text-xs text-blue-600 mt-1">Speaking...</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900 italic">{currentInterim}</p>
-                        <p className="text-xs text-yellow-600 mt-1">Speaking...</p>
-                      </div>
+                      )}
                     </div>
                   )}
 
-                  {streamActive && transcripts.length === 0 && !currentInterim && (
+                  {streamActive && completeSentences.length === 0 && !currentSpeakers.inbound && (
                     <div className="text-center py-8">
                       <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <svg className="w-6 h-6 text-green-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
