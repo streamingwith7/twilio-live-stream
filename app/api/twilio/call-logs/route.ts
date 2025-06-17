@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import twilio, { Twilio } from 'twilio';
 
+export const dynamic = 'force-dynamic';
+
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 
@@ -12,8 +14,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const client: Twilio = twilio(accountSid, authToken);
 
-    const { searchParams } = new URL(request.url);
-    const phoneNumber: string | null = searchParams.get('phone-number');
+    const phoneNumber: string | null = request.nextUrl.searchParams.get('phone-number');
 
     if (!phoneNumber) {
       return NextResponse.json(

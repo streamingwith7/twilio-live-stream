@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
     const phoneNumber = searchParams.get('phoneNumber')
 
     if (!phoneNumber) {
-      // Get all active calls grouped by phone number
       const activeCalls = await prisma.callRecord.findMany({
         where: {
           isActive: true
@@ -26,7 +25,6 @@ export async function GET(request: NextRequest) {
         }
       })
 
-      // Group calls by phone number
       const callsByPhone = activeCalls.reduce((acc: { [x: string]: any[] }, call: { phoneNumber: string | number }) => {
         if (!acc[call.phoneNumber]) {
           acc[call.phoneNumber] = []
@@ -37,7 +35,6 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(callsByPhone)
     } else {
-      // Get active calls for specific phone number
       const calls = await prisma.callRecord.findMany({
         where: {
           phoneNumber,

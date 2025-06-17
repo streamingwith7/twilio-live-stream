@@ -3,7 +3,8 @@ import twilio, { Twilio } from 'twilio';
 
 const accountSid: string = process.env.TWILIO_ACCOUNT_SID || '';
 const authToken: string = process.env.TWILIO_AUTH_TOKEN || '';
-const baseURL: string = process.env.NEXT_PUBLIC_SITE_URL || '';
+const baseURL: string = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.closemydeals.com';
+const websocketPort = process.env.WEBSOCKET_PORT || 3001;
 
 if (!accountSid || !authToken || !baseURL) {
   throw new Error('Environment variables for Twilio are not properly set.');
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const stream = await client.calls(callSid).streams.create({
-      url: `wss://${baseURL.replace('https://', '').replace('http://', '')}/api/twilio/media-stream`,
+      url: `wss://${new URL(baseURL).host}:${websocketPort}/api/twilio/media-stream`,
       track: 'both_tracks',
       name: `enhanced_stream_${Date.now()}`,
       statusCallback: `${baseURL}/api/twilio/stream-status`,

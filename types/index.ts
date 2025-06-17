@@ -2,11 +2,16 @@ export interface PhoneNumber {
   sid: string
   phoneNumber: string
   friendlyName: string
+  voiceUrl?: string
+  voiceMethod?: string
+  statusCallback?: string
+  statusCallbackMethod?: string
   capabilities: {
     voice: boolean
     sms: boolean
     mms: boolean
   }
+  isConnectedToPlatform?: boolean
 }
 
 export interface CallStatus {

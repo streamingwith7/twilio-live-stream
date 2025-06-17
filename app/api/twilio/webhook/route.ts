@@ -70,31 +70,72 @@ export async function POST(request: NextRequest) {
 
     console.log('Real-time call status update:', callUpdate)
 
+    // For calls that are answered, start streaming for real-time transcription
     if (callStatus === 'in-progress') {
-      const twiml = `
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.closemydeals.com'
+      const websocketPort = process.env.WEBSOCKET_PORT || 3001
+      
+      // Check if this is an inbound call to a connected number
+      // For now, we'll create a conference room for the call
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
+          <Say voice="alice">Welcome to Closemydeals. Please hold while we connect you to an agent.</Say>
           <Start>
-            <Stream url="wss://yourdomain.com/api/twilio/media-stream">
+            <Stream url="wss://${new URL(baseUrl).host}:${websocketPort}/api/twilio/media-stream">
               <Parameter name="callSid" value="${callSid}" />
               <Parameter name="phoneNumber" value="${callRecord.phoneNumber}" />
               <Parameter name="from" value="${from}" />
               <Parameter name="to" value="${to}" />
               <Parameter name="direction" value="${direction}" />
+              <Parameter name="platform" value="closemydeals" />
             </Stream>
           </Start>
-        </Response>
-      `
+          <Dial>
+            <Conference 
+              statusCallback="${baseUrl}/api/twilio/conference-status"
+              statusCallbackMethod="POST"
+              statusCallbackEvent="start end join leave mute hold"
+              record="record-from-start"
+              recordingStatusCallback="${baseUrl}/api/twilio/recording-status"
+              recordingStatusCallbackMethod="POST"
+              waitUrl=""
+              waitMethod="GET"
+              maxParticipants="10"
+              startConferenceOnEnter="true"
+              endConferenceOnExit="false"
+            >
+              closemydeals-${callSid}
+            </Conference>
+          </Dial>
+          <Say voice="alice">Thank you for calling Closemydeals. Have a great day!</Say>
+        </Response>`
+      
       return new NextResponse(twiml, {
         headers: { 'Content-Type': 'text/xml' }
       })
     }
 
-    return NextResponse.json({ success: true })
+    // For other statuses, return empty TwiML
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+      </Response>`
+    
+    return new NextResponse(twiml, {
+      headers: { 'Content-Type': 'text/xml' }
+    })
+
   } catch (error) {
     console.error('Webhook error:', error)
-    return NextResponse.json(
-      { error: 'Webhook processing failed' },
-      { status: 500 }
-    )
+    
+    // Return error TwiML
+    const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Say voice="alice">We're sorry, but we're experiencing technical difficulties. Please try again later.</Say>
+        <Hangup />
+      </Response>`
+    
+    return new NextResponse(errorTwiml, {
+      headers: { 'Content-Type': 'text/xml' }
+    })
   }
 } 
