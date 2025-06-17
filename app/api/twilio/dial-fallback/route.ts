@@ -20,11 +20,15 @@ export async function POST(request: NextRequest) {
       allParams: Object.fromEntries(body.entries())
     })
 
+    // Determine if this is an outbound browser call
+    const isOutboundBrowserCall = from && from.startsWith('client:')
+
     // Notify web clients about dial result
     if (global.io) {
       global.io.emit('dialResult', {
         callSid,
         dialCallStatus,
+        callType: isOutboundBrowserCall ? 'outbound-browser' : 'incoming',
         timestamp: new Date().toISOString()
       })
     }
@@ -32,36 +36,54 @@ export async function POST(request: NextRequest) {
     let twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>`
 
-    if (dialCallStatus === 'completed') {
-      // Call was successfully connected and completed
-      twiml += `
-        <Say voice="alice">Thank you for calling Close My Deals. Have a great day!</Say>`
-    } else if (dialCallStatus === 'answered') {
-      // Call was answered but we shouldn't reach here normally
-      twiml += `
-        <Say voice="alice">Call connected successfully.</Say>`
-    } else if (dialCallStatus === 'busy') {
-      twiml += `
-        <Say voice="alice">All our agents are currently on other calls. Please leave a message after the tone.</Say>
-        <Record 
-          timeout="30" 
-          maxLength="120" 
-          action="${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/recording-status"
-          method="POST" />
-        <Say voice="alice">Thank you for your message. We will get back to you soon.</Say>`
-    } else if (dialCallStatus === 'no-answer' || dialCallStatus === 'failed') {
-      twiml += `
-        <Say voice="alice">All agents are currently unavailable. Please leave a message after the tone.</Say>
-        <Record 
-          timeout="30" 
-          maxLength="120" 
-          action="${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/recording-status"
-          method="POST" />
-        <Say voice="alice">Thank you for your message. We will get back to you soon.</Say>`
+    if (isOutboundBrowserCall) {
+      // Handle outbound browser call failures
+      if (dialCallStatus === 'completed') {
+        // Call was successful, no additional message needed
+        twiml += `<Hangup />`
+      } else if (dialCallStatus === 'busy') {
+        twiml += `
+          <Say voice="alice">The number you called is busy. Please try again later.</Say>`
+      } else if (dialCallStatus === 'no-answer') {
+        twiml += `
+          <Say voice="alice">The call was not answered. Please try again later.</Say>`
+      } else if (dialCallStatus === 'failed') {
+        twiml += `
+          <Say voice="alice">The call could not be completed. Please check the number and try again.</Say>`
+      } else {
+        twiml += `
+          <Say voice="alice">The call could not be completed. Please try again later.</Say>`
+      }
     } else {
-      // Unknown status
-      twiml += `
-        <Say voice="alice">We're experiencing technical difficulties. Please try again later.</Say>`
+      // Handle incoming call failures (original logic)
+      if (dialCallStatus === 'completed') {
+        twiml += `
+          <Say voice="alice">Thank you for calling Close My Deals. Have a great day!</Say>`
+      } else if (dialCallStatus === 'answered') {
+        twiml += `
+          <Say voice="alice">Call connected successfully.</Say>`
+      } else if (dialCallStatus === 'busy') {
+        twiml += `
+          <Say voice="alice">All our agents are currently on other calls. Please leave a message after the tone.</Say>
+          <Record 
+            timeout="30" 
+            maxLength="120" 
+            action="${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/recording-status"
+            method="POST" />
+          <Say voice="alice">Thank you for your message. We will get back to you soon.</Say>`
+      } else if (dialCallStatus === 'no-answer' || dialCallStatus === 'failed') {
+        twiml += `
+          <Say voice="alice">All agents are currently unavailable. Please leave a message after the tone.</Say>
+          <Record 
+            timeout="30" 
+            maxLength="120" 
+            action="${process.env.NEXT_PUBLIC_SITE_URL}/api/twilio/recording-status"
+            method="POST" />
+          <Say voice="alice">Thank you for your message. We will get back to you soon.</Say>`
+      } else {
+        twiml += `
+          <Say voice="alice">We're experiencing technical difficulties. Please try again later.</Say>`
+      }
     }
 
     twiml += `

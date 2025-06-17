@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate phone number format
     const phoneRegex = /^\+?[1-9]\d{1,14}$/
     if (!phoneRegex.test(toNumber.replace(/[\s()-]/g, ''))) {
       return NextResponse.json(
@@ -33,6 +32,19 @@ export async function POST(request: NextRequest) {
 
     const client = twilio(accountSid, authToken)
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://closemydeals.com'
+
+    console.log('call-status', {
+      from: fromNumber,
+      to: toNumber,
+      url: `${baseUrl}/api/twilio/outbound-webhook`,
+      method: 'POST',
+      statusCallback: `${baseUrl}/api/twilio/webhook`,
+      statusCallbackMethod: 'POST',
+      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed', 'busy', 'failed', 'no-answer'],
+      record: true,
+      recordingStatusCallback: `${baseUrl}/api/twilio/recording-status`,
+      recordingStatusCallbackMethod: 'POST'
+    });
 
     const call = await client.calls.create({
       from: fromNumber,
@@ -47,7 +59,6 @@ export async function POST(request: NextRequest) {
       recordingStatusCallbackMethod: 'POST'
     })
 
-    // Broadcast call initiation to connected clients
     if (global.io) {
       global.io.emit('callInitiated', {
         callSid: call.sid,

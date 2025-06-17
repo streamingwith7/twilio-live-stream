@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if TWILIO_PHONE_NUMBER is configured
     const twilioPhoneNumber = process.env.TWILIO_PHONE_NUMBER
     if (!twilioPhoneNumber) {
       return NextResponse.json(
@@ -34,7 +33,6 @@ export async function POST(request: NextRequest) {
     const client = twilio(accountSid, authToken)
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.closemydeals.com'
 
-    // Create TwiML to join the conference
     const joinTwiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
         <Say voice="alice">Connecting you to the call...</Say>
@@ -51,7 +49,6 @@ export async function POST(request: NextRequest) {
         </Dial>
       </Response>`
 
-    // Call the agent to join the conference
     const agentCall = await client.calls.create({
       from: twilioPhoneNumber,
       to: agentPhoneNumber,
@@ -61,7 +58,6 @@ export async function POST(request: NextRequest) {
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
     })
 
-    // Broadcast that an agent is joining
     if (global.io) {
       global.io.to(`call_${callSid}`).emit('agentJoining', {
         callSid,

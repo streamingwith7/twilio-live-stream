@@ -47,10 +47,8 @@ export default function Dialer({
   }, [callStatus])
 
   const formatPhoneNumber = (value: string) => {
-    // Remove all non-digit characters
     const cleaned = value.replace(/\D/g, '')
     
-    // Format as (XXX) XXX-XXXX for US numbers
     if (cleaned.length >= 10) {
       const formatted = cleaned.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3')
       return formatted
@@ -101,10 +99,10 @@ export default function Dialer({
 
     try {
       if (voiceClient && voiceClient.isReady) {
-        console.log('Making browser call via voice client')
-        await voiceClient.makeCall(formattedToNumber)
+        console.log('Making browser call via voice client from', selectedFromNumber, 'to', formattedToNumber)
+        await voiceClient.makeCall(formattedToNumber, selectedFromNumber)
         saveToRecent(phoneNumber)
-        onCallInitiated?.({ type: 'browser-call', to: formattedToNumber })
+        onCallInitiated?.({ type: 'browser-call', to: formattedToNumber, from: selectedFromNumber })
         setPhoneNumber('')
         return
       }

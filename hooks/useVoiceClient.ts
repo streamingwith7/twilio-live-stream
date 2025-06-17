@@ -229,17 +229,20 @@ export function useVoiceClient({
     }
   }
 
-  const makeCall = async (phoneNumber: string) => {
+  const makeCall = async (phoneNumber: string, fromNumber?: string) => {
     if (!device || !isReady) {
       onError?.('Device not ready for outgoing calls')
       return null
     }
 
     try {
+      const params: any = {
+        To: phoneNumber,
+        CallerId: fromNumber || process.env.TWILIO_PHONE_NUMBER
+      }
+
       const call = await device.connect({
-        params: {
-          To: phoneNumber
-        }
+        params
       })
 
       setActiveCall(call)

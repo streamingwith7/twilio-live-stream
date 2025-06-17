@@ -63,7 +63,6 @@ export default function MakeCallPage() {
     }
   }, [])
 
-  // Voice client hook - this provides browser calling with audio
   const voiceClient = useVoiceClient({
     user,
     onIncomingCall: handleIncomingCall,
