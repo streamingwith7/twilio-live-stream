@@ -33,15 +33,14 @@ app.prepare().then(() => {
           const callSid = parsedBody.get('CallSid');
           const streamStatus = parsedBody.get('StreamEvent');
           console.log(`🔄 Stream Status: SID=${streamSid}, Call=${callSid}, Status=${streamStatus}`);
-          
-          // Emit stream status to connected clients
-          io.emit('streamStatus', { 
-            streamSid, 
-            callSid, 
+
+          io.to(`call_${callSid}`).emit('streamStatus', {
+            streamSid,
+            callSid,
             status: streamStatus,
             timestamp: new Date().toISOString()
           });
-          
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ received: true }));
         });
@@ -85,7 +84,6 @@ app.prepare().then(() => {
       console.log(`🔌 Socket.IO client disconnected: ${socket.id}`);
     });
 
-    // Allow clients to join specific call rooms for targeted updates
     socket.on('joinCallRoom', (callSid) => {
       socket.join(`call_${callSid}`);
       console.log(`📞 Socket ${socket.id} joined room for call ${callSid}`);
@@ -103,7 +101,7 @@ app.prepare().then(() => {
   });
 
   const activeConnections = new Map();
-  const activeStreams = new Map(); // Track active streams by callSid
+  const activeStreams = new Map();
 
   wss.on('connection', (ws) => {
     console.log('📞 Twilio Media Stream connected');
@@ -120,9 +118,9 @@ app.prepare().then(() => {
           callSid = message.start.callSid;
           streamSid = message.start.streamSid;
           console.log(`🔗 Media stream started for call: ${callSid}, stream: ${streamSid}`);
-          
+
           const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
-          
+
           deepgramConnection = deepgram.listen.live({
             model: "nova-2",
             language: "en-US",
@@ -144,26 +142,18 @@ app.prepare().then(() => {
           });
 
           activeConnections.set(ws, deepgramConnection);
-          activeStreams.set(callSid, { 
-            ws, 
-            deepgramConnection, 
+          activeStreams.set(callSid, {
+            ws,
+            deepgramConnection,
             streamSid,
             startTime: new Date().toISOString()
           });
 
           deepgramConnection.on(LiveTranscriptionEvents.Open, () => {
             console.log(`🎙️ Deepgram connection opened for call ${callSid}`);
-            
-            // Notify clients that transcription is ready
-            io.emit('transcriptionReady', { 
-              callSid, 
-              streamSid,
-              timestamp: new Date().toISOString()
-            });
-            
-            // Also notify specific call room
-            io.to(`call_${callSid}`).emit('transcriptionReady', { 
-              callSid, 
+
+            io.to(`call_${callSid}`).emit('transcriptionReady', {
+              callSid,
               streamSid,
               timestamp: new Date().toISOString()
             });
@@ -171,16 +161,9 @@ app.prepare().then(() => {
 
           deepgramConnection.on(LiveTranscriptionEvents.Close, () => {
             console.log(`🎙️ Deepgram connection closed for call ${callSid}`);
-            
-            // Notify clients that transcription has ended
-            io.emit('transcriptionEnded', { 
-              callSid, 
-              streamSid,
-              timestamp: new Date().toISOString()
-            });
-            
-            io.to(`call_${callSid}`).emit('transcriptionEnded', { 
-              callSid, 
+
+            io.to(`call_${callSid}`).emit('transcriptionEnded', {
+              callSid,
               streamSid,
               timestamp: new Date().toISOString()
             });
@@ -190,10 +173,10 @@ app.prepare().then(() => {
             const transcript = data.channel.alternatives[0].transcript;
             const isInterim = data.is_final === false;
             const confidence = data.channel.alternatives[0].confidence;
-            
+
             if (transcript && transcript.trim().length > 0) {
-              const transcriptData = { 
-                callSid, 
+              const transcriptData = {
+                callSid,
                 streamSid,
                 text: transcript,
                 type: isInterim ? 'interim' : 'final',
@@ -205,36 +188,30 @@ app.prepare().then(() => {
               if (!isInterim) {
                 console.log(`🎙️ Final Transcript [${callSid}]:`, transcript);
               }
-              
-              // Emit to all clients
-              io.emit('liveTranscript', transcriptData);
-              
-              // Also emit to specific call room
+
               io.to(`call_${callSid}`).emit('liveTranscript', transcriptData);
             }
           });
 
           deepgramConnection.on(LiveTranscriptionEvents.UtteranceEnd, (data) => {
-            const utteranceData = { 
-              callSid, 
+            const utteranceData = {
+              callSid,
               streamSid,
               timestamp: new Date().toISOString()
             };
-            
+
             console.log(`🎙️ Utterance end for call ${callSid}`);
-            io.emit('utteranceEnd', utteranceData);
             io.to(`call_${callSid}`).emit('utteranceEnd', utteranceData);
           });
 
           deepgramConnection.on(LiveTranscriptionEvents.SpeechStarted, (data) => {
-            const speechData = { 
-              callSid, 
+            const speechData = {
+              callSid,
               streamSid,
               timestamp: new Date().toISOString()
             };
-            
+
             console.log(`🎙️ Speech started for call ${callSid}`);
-            io.emit('speechStarted', speechData);
             io.to(`call_${callSid}`).emit('speechStarted', speechData);
           });
 
@@ -244,15 +221,14 @@ app.prepare().then(() => {
 
           deepgramConnection.on(LiveTranscriptionEvents.Error, (err) => {
             console.error(`❌ Deepgram error for call ${callSid}:`, err);
-            
-            const errorData = { 
-              callSid, 
+
+            const errorData = {
+              callSid,
               streamSid,
               error: err.message,
               timestamp: new Date().toISOString()
             };
-            
-            io.emit('transcriptionError', errorData);
+
             io.to(`call_${callSid}`).emit('transcriptionError', errorData);
           });
 
@@ -261,7 +237,9 @@ app.prepare().then(() => {
         case 'media':
           if (deepgramConnection && deepgramConnection.getReadyState() === 1) {
             try {
-              const audioBuffer = Buffer.from(message.media.payload, 'base64');
+              const { track, payload } = message.media;
+              console.log('track', track);
+              const audioBuffer = Buffer.from(payload, 'base64');
               deepgramConnection.send(audioBuffer);
             } catch (error) {
               console.error(`❌ Error sending audio to Deepgram for call ${callSid}:`, error);
@@ -271,6 +249,7 @@ app.prepare().then(() => {
 
         case 'stop':
           console.log(`🛑 Media stream stopped for call: ${callSid}`);
+          
           if (deepgramConnection) {
             try {
               deepgramConnection.finish();
@@ -291,6 +270,7 @@ app.prepare().then(() => {
 
     ws.on('close', () => {
       console.log(`📞 Media stream connection closed for call: ${callSid}`);
+      
       if (deepgramConnection) {
         try {
           deepgramConnection.finish();
@@ -307,6 +287,7 @@ app.prepare().then(() => {
 
     ws.on('error', (error) => {
       console.error(`❌ Media stream WebSocket error for call ${callSid}:`, error);
+      
       if (deepgramConnection) {
         try {
           deepgramConnection.finish();
@@ -322,32 +303,9 @@ app.prepare().then(() => {
     });
   });
 
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('🛑 Shutting down gracefully...');
-    
-    // Close all active Deepgram connections
-    for (const [ws, deepgramConnection] of activeConnections) {
-      try {
-        deepgramConnection.finish();
-      } catch (error) {
-        console.error('❌ Error closing Deepgram connection during shutdown:', error);
-      }
-    }
-    
-    activeConnections.clear();
-    activeStreams.clear();
-    
-    httpServer.close(() => {
-      console.log('✅ Server closed');
-      process.exit(0);
-    });
-  });
-
-  // Health check endpoint for active streams
   httpServer.on('request', (req, res) => {
     const parsedUrl = parse(req.url, true);
-    
+
     if (req.method === 'GET' && parsedUrl.pathname === '/api/health/streams') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({

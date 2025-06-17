@@ -43,11 +43,47 @@ export default function TranscriptionPage() {
   const [streamSid, setStreamSid] = useState<string | null>(null)
   const [isStartingStream, setIsStartingStream] = useState(false)
   const [isStoppingStream, setIsStoppingStream] = useState(false)
-  
+
   const router = useRouter()
   const searchParams = useSearchParams()
   const callSid = searchParams.get('callSid')
   const phoneNumber = searchParams.get('phone')
+
+  const startTranscription = async () => {
+    if (!callSid) return
+
+    setIsStartingStream(true)
+    setStreamError('')
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/twilio/convert-conference', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ callSid })
+      })
+
+      const data: StreamResponse = await response.json()
+
+      if (response.ok && data.success) {
+        setStreamActive(true)
+        setCallDetails(data.callDetails)
+        setStreamSid(data.streamSid)
+        setTranscripts([]) // Clear previous transcripts
+        setCurrentInterim('')
+      } else {
+        setStreamError(data.error || 'Failed to start transcription')
+      }
+    } catch (error) {
+      setStreamError('Failed to start transcription')
+      console.error('Error starting transcription:', error)
+    } finally {
+      setIsStartingStream(false)
+    }
+  }
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -77,6 +113,9 @@ export default function TranscriptionPage() {
       console.log('Connected to WebSocket server')
       // Join the specific call room for targeted updates
       newSocket.emit('joinCallRoom', callSid)
+
+      // Auto-start transcription when connected
+      startTranscription()
     })
 
     newSocket.on('disconnect', () => {
@@ -147,42 +186,6 @@ export default function TranscriptionPage() {
       newSocket.disconnect()
     }
   }, [router, callSid, phoneNumber])
-
-  const startTranscription = async () => {
-    if (!callSid) return
-
-    setIsStartingStream(true)
-    setStreamError('')
-
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/twilio/convert-conference', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ callSid })
-      })
-
-      const data: StreamResponse = await response.json()
-
-      if (response.ok && data.success) {
-        setStreamActive(true)
-        setCallDetails(data.callDetails)
-        setStreamSid(data.streamSid)
-        setTranscripts([]) // Clear previous transcripts
-        setCurrentInterim('')
-      } else {
-        setStreamError(data.error || 'Failed to start transcription')
-      }
-    } catch (error) {
-      setStreamError('Failed to start transcription')
-      console.error('Error starting transcription:', error)
-    } finally {
-      setIsStartingStream(false)
-    }
-  }
 
   const stopTranscription = async () => {
     if (!callSid || !streamSid) return
@@ -286,24 +289,7 @@ export default function TranscriptionPage() {
                 </p>
               </div>
               <div className="flex items-center space-x-4">
-                {!streamActive ? (
-                  <button
-                    onClick={startTranscription}
-                    disabled={isStartingStream}
-                    className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                  >
-                    {isStartingStream ? (
-                      <svg className="w-5 h-5 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                      </svg>
-                    )}
-                    {isStartingStream ? 'Starting...' : 'Start Transcription'}
-                  </button>
-                ) : (
+                {streamActive && (
                   <button
                     onClick={stopTranscription}
                     disabled={isStoppingStream}
@@ -321,7 +307,7 @@ export default function TranscriptionPage() {
                     {isStoppingStream ? 'Stopping...' : 'Stop Transcription'}
                   </button>
                 )}
-                
+
                 {transcripts.length > 0 && (
                   <>
                     <button
@@ -333,7 +319,7 @@ export default function TranscriptionPage() {
                       </svg>
                       Download
                     </button>
-                    
+
                     <button
                       onClick={clearTranscripts}
                       className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
@@ -359,9 +345,9 @@ export default function TranscriptionPage() {
                 </span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className={`w-3 h-3 rounded-full ${streamActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                <div className={`w-3 h-3 rounded-full ${streamActive ? 'bg-green-500 animate-pulse' : isStartingStream ? 'bg-yellow-500 animate-pulse' : 'bg-gray-400'}`}></div>
                 <span className="text-sm text-gray-600">
-                  {streamActive ? 'Transcription Active' : 'Transcription Inactive'}
+                  {streamActive ? 'Transcription Active' : isStartingStream ? 'Starting Transcription...' : 'Transcription Inactive'}
                 </span>
               </div>
             </div>
@@ -392,14 +378,14 @@ export default function TranscriptionPage() {
             </div>
 
             <div className="p-6">
-              {!streamActive && transcripts.length === 0 && (
+              {!streamActive && !isStartingStream && transcripts.length === 0 && (
                 <div className="text-center py-16">
                   <svg className="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                   </svg>
-                  <h3 className="text-xl font-medium text-gray-900 mb-2">Start Transcription</h3>
+                  <h3 className="text-xl font-medium text-gray-900 mb-2">Initializing Transcription</h3>
                   <p className="text-gray-500">
-                    Click "Start Transcription" to begin real-time speech-to-text for this call.
+                    Setting up real-time speech-to-text for this call...
                   </p>
                 </div>
               )}
