@@ -3,27 +3,22 @@ const { createClient, LiveTranscriptionEvents } = require('@deepgram/sdk');
 const { createServer } = require('http');
 const { parse } = require('url');
 
-// Environment configuration
 require('dotenv').config();
 
 const port = process.env.WEBSOCKET_PORT || 3001;
 const hostname = process.env.WEBSOCKET_HOST || 'localhost';
 
-// Create HTTP server for WebSocket
 const server = createServer();
 
-// Create WebSocket server specifically for Twilio media streams
 const wss = new WebSocket.Server({
   server: server,
   path: '/api/twilio/media-stream',
 });
 
-// Active connections and transcription state
 const activeConnections = new Map();
 const activeStreams = new Map();
 const sentenceBuilders = new Map();
 
-// Socket.IO client to communicate with main server
 const io = require('socket.io-client');
 const socketClient = io(`http://localhost:5000`, {
   auth: {
@@ -56,7 +51,6 @@ wss.on('connection', (ws, request) => {
           streamSid = message.start.streamSid;
           console.log(`🔗 Media stream started for call: ${callSid}, stream: ${streamSid}`);
 
-          // Initialize sentence builders for this call
           sentenceBuilders.set(callSid, {
             inbound: { 
               text: '', 
@@ -67,7 +61,6 @@ wss.on('connection', (ws, request) => {
             }
           });
 
-          // Create Deepgram connection
           const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
 
           deepgramConnection = deepgram.listen.live({
@@ -92,7 +85,6 @@ wss.on('connection', (ws, request) => {
             no_delay: false
           });
 
-          // Store active connections
           activeConnections.set(ws, deepgramConnection);
           activeStreams.set(callSid, {
             ws,
@@ -101,11 +93,9 @@ wss.on('connection', (ws, request) => {
             startTime: new Date().toISOString()
           });
 
-          // Handle Deepgram events
           deepgramConnection.on(LiveTranscriptionEvents.Open, () => {
             console.log(`🎙️ Deepgram connection opened for call ${callSid}`);
 
-            // Notify main server that transcription is ready
             socketClient.emit('transcriptionReady', {
               callSid,
               streamSid,
@@ -116,7 +106,6 @@ wss.on('connection', (ws, request) => {
           deepgramConnection.on(LiveTranscriptionEvents.Close, () => {
             console.log(`🎙️ Deepgram connection closed for call ${callSid}`);
 
-            // Send any remaining text as complete sentences
             const builders = sentenceBuilders.get(callSid);
             if (builders) {
               ['inbound', 'outbound'].forEach(speaker => {
@@ -176,7 +165,6 @@ wss.on('connection', (ws, request) => {
 
                 socketClient.emit('liveTranscript', { callSid, transcript: transcriptData });
               } else {
-                // Add to accumulated text
                 if (builders[speaker].text.trim()) {
                   builders[speaker].text += ' ' + transcript;
                 } else {
@@ -207,7 +195,6 @@ wss.on('connection', (ws, request) => {
               console.log(`🎙️ Complete Sentence Emitted [${callSid}]:`, completeSentence.text);
               socketClient.emit('completeSentence', { callSid, sentence: completeSentence });
 
-              // Reset builder for next sentence
               builders.inbound = { 
                 text: '', 
                 confidence: 0, 
@@ -272,7 +259,6 @@ wss.on('connection', (ws, request) => {
         case 'stop':
           console.log(`🛑 Media stream stopped for call: ${callSid}`);
           
-          // Send any remaining text as complete sentences
           const builders = sentenceBuilders.get(callSid);
           if (builders) {
             ['inbound', 'outbound'].forEach(speaker => {
@@ -291,7 +277,6 @@ wss.on('connection', (ws, request) => {
             sentenceBuilders.delete(callSid);
           }
           
-          // Clean up Deepgram connection
           if (deepgramConnection) {
             try {
               deepgramConnection.finish();
@@ -316,7 +301,6 @@ wss.on('connection', (ws, request) => {
   ws.on('close', () => {
     console.log(`📞 Media stream connection closed for call: ${callSid}`);
     
-    // Send any remaining text as complete sentences
     const builders = sentenceBuilders.get(callSid);
     if (builders) {
       ['inbound', 'outbound'].forEach(speaker => {
@@ -335,7 +319,6 @@ wss.on('connection', (ws, request) => {
       sentenceBuilders.delete(callSid);
     }
     
-    // Clean up connections
     if (deepgramConnection) {
       try {
         deepgramConnection.finish();
@@ -353,7 +336,6 @@ wss.on('connection', (ws, request) => {
   ws.on('error', (error) => {
     console.error(`❌ Media stream WebSocket error for call ${callSid}:`, error);
     
-    // Send any remaining text as complete sentences
     const builders = sentenceBuilders.get(callSid);
     if (builders) {
       ['inbound', 'outbound'].forEach(speaker => {
@@ -372,7 +354,6 @@ wss.on('connection', (ws, request) => {
       sentenceBuilders.delete(callSid);
     }
     
-    // Clean up connections
     if (deepgramConnection) {
       try {
         deepgramConnection.finish();
@@ -388,7 +369,6 @@ wss.on('connection', (ws, request) => {
   });
 });
 
-// Health check endpoint
 server.on('request', (req, res) => {
   const parsedUrl = parse(req.url, true);
 
@@ -406,7 +386,6 @@ server.on('request', (req, res) => {
     return;
   }
 
-  // 404 for other requests
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Not Found');
 });
@@ -420,11 +399,9 @@ server.listen(port, hostname, () => {
   console.log('🔗 Connecting to main Socket.IO server...');
 });
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('🛑 Received SIGTERM, shutting down gracefully...');
   
-  // Close all active connections
   activeConnections.forEach((deepgramConnection, ws) => {
     try {
       if (deepgramConnection) {
@@ -445,7 +422,6 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('🛑 Received SIGINT, shutting down gracefully...');
   
-  // Close all active connections
   activeConnections.forEach((deepgramConnection, ws) => {
     try {
       if (deepgramConnection) {
@@ -456,6 +432,7 @@ process.on('SIGINT', () => {
       console.error('❌ Error during cleanup:', error);
     }
   });
+  
   
   server.close(() => {
     console.log('✅ Transcription WebSocket Server shut down complete');
