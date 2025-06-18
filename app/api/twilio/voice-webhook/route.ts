@@ -28,6 +28,10 @@ export async function POST(request: NextRequest) {
     console.log('📞 Call type:', isOutboundBrowserCall ? 'Outbound Browser Call' : 'Incoming Call')
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://closemydeals.com'
+    
+    // Fix WebSocket URL for media streaming
+    const wsUrl = baseUrl.replace('https://', 'wss://').replace('http://', 'ws://')
+    
     let twiml = ''
 
     if (isOutboundBrowserCall) {
@@ -50,7 +54,7 @@ export async function POST(request: NextRequest) {
         twiml = `<?xml version="1.0" encoding="UTF-8"?>
           <Response>
             <Start>
-              <Stream url="wss://${new URL(baseUrl).hostname}:${process.env.WEBSOCKET_PORT || 3001}/media-stream">
+              <Stream url="${wsUrl}/api/twilio/media-stream">
                 <Parameter name="callSid" value="${callSid}" />
                 <Parameter name="from" value="${from}" />
                 <Parameter name="to" value="${to}" />

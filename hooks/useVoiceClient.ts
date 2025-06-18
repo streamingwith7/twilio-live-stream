@@ -50,26 +50,54 @@ export function useVoiceClient({
         return
       }
 
-      // Initialize Twilio Device with minimal config
+      // Initialize Twilio Device with enhanced configuration
       const newDevice = new Device(token, {
-        logLevel: 'debug'
+        logLevel: 'debug',
+        // Add edge locations for better connectivity
+        edge: ['sydney', 'dublin', 'tokyo'],
+        // Set timeout values
+        maxAverageBitrate: 16000,
+        // Add connection retry options
+        allowIncomingWhileBusy: false
       })
 
       // Setup device event listeners
       setupDeviceListeners(newDevice)
 
-      // Register the device
-      await newDevice.register()
-      
-      deviceRef.current = newDevice
-      setDevice(newDevice)
-      setIsReady(true)
+      try {
+        // Register the device with retry logic
+        await newDevice.register()
+        
+        deviceRef.current = newDevice
+        setDevice(newDevice)
+        setIsReady(true)
 
-      console.log('Twilio Device initialized and registered')
+        console.log('Twilio Device initialized and registered successfully')
+      } catch (registerError: any) {
+        console.error('Device registration failed:', registerError)
+        
+        // More specific error handling for registration failures
+        if (registerError.code === 31005) {
+          onError?.('WebSocket connection failed. Please check your internet connection and try again.')
+        } else if (registerError.code === 31204) {
+          onError?.('Invalid access token. Please refresh the page and try again.')
+        } else {
+          onError?.(`Device registration failed: ${registerError.message}`)
+        }
+        return
+      }
 
     } catch (error: any) {
       console.error('Device initialization error:', error)
-      onError?.('Failed to initialize voice calling: ' + error.message)
+      
+      // Enhanced error handling with specific 31005 guidance
+      if (error.code === 31005) {
+        onError?.('WebSocket connection to Twilio failed. This may be due to network issues, firewall restrictions, or proxy settings. Please check your internet connection and try again.')
+      } else if (error.message?.includes('WebSocket')) {
+        onError?.('WebSocket connection failed. Please ensure your browser supports WebSockets and try again.')
+      } else {
+        onError?.('Failed to initialize voice calling: ' + error.message)
+      }
     }
   }
 
@@ -231,11 +259,13 @@ export function useVoiceClient({
 
   const makeCall = async (phoneNumber: string, fromNumber?: string) => {
     if (!device || !isReady) {
-      onError?.('Device not ready for outgoing calls')
+      onError?.('Device not ready for outgoing calls. Please wait for the device to connect.')
       return null
     }
 
     try {
+      console.log('Making call to:', phoneNumber, 'from:', fromNumber)
+      
       const params: any = {
         To: phoneNumber,
         CallerId: fromNumber || process.env.TWILIO_PHONE_NUMBER
@@ -249,10 +279,25 @@ export function useVoiceClient({
       setCallStatus('connecting')
       setupCallListeners(call)
 
+      console.log('Call initiated successfully:', call.sid)
       return call
     } catch (error: any) {
       console.error('Make call error:', error)
-      onError?.('Failed to make call: ' + error.message)
+      
+      // Enhanced error handling for specific error codes
+      if (error.code === 31005) {
+        onError?.('WebSocket connection lost during call setup. Please check your internet connection and try again.')
+      } else if (error.code === 31003) {
+        onError?.('Connection timeout. Please check your internet connection and try again.')
+      } else if (error.code === 31009) {
+        onError?.('No transport available. Please refresh the page and try again.')
+      } else if (error.code === 31204) {
+        onError?.('Invalid access token. Please refresh the page and try again.')
+      } else if (error.message?.includes('WebSocket')) {
+        onError?.('WebSocket connection failed. Please check your internet connection and firewall settings.')
+      } else {
+        onError?.(`Failed to make call: ${error.message}`)
+      }
       return null
     }
   }

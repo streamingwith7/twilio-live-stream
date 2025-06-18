@@ -71,7 +71,6 @@ export async function PUT(request: NextRequest) {
     let updateData: any = {}
 
     if (action === 'connect') {
-      // Connect phone number to our platform for incoming calls
       updateData = {
         voiceUrl: `${baseUrl}/api/twilio/voice-webhook`,
         voiceMethod: 'POST',
@@ -80,7 +79,6 @@ export async function PUT(request: NextRequest) {
         statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed']
       }
     } else if (action === 'disconnect') {
-      // Disconnect phone number from our platform
       updateData = {
         voiceUrl: '',
         voiceMethod: 'POST',

@@ -70,18 +70,20 @@ export async function POST(request: NextRequest) {
 
     console.log('Real-time call status update:', callUpdate)
 
-    // For calls that are answered, start streaming for real-time transcription
-    if (callStatus === 'in-progress') {
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.closemydeals.com'
-      const websocketPort = process.env.WEBSOCKET_PORT || 3001
-      
-      // Check if this is an inbound call to a connected number
-      // For now, we'll create a conference room for the call
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-          <Say voice="alice">Welcome to Closemydeals. Please hold while we connect you to an agent.</Say>
-          <Start>
-            <Stream url="wss://${new URL(baseUrl).host}:${websocketPort}/api/twilio/media-stream">
+          // For calls that are answered, start streaming for real-time transcription
+      if (callStatus === 'in-progress') {
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.closemydeals.com'
+        
+        // Fix WebSocket URL for media streaming
+        const wsUrl = baseUrl.replace('https://', 'wss://').replace('http://', 'ws://')
+        
+        // Check if this is an inbound call to a connected number
+        // For now, we'll create a conference room for the call
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+          <Response>
+            <Say voice="alice">Welcome to Closemydeals. Please hold while we connect you to an agent.</Say>
+            <Start>
+              <Stream url="${wsUrl}/api/twilio/media-stream">
               <Parameter name="callSid" value="${callSid}" />
               <Parameter name="phoneNumber" value="${callRecord.phoneNumber}" />
               <Parameter name="from" value="${from}" />

@@ -18,12 +18,14 @@ export async function POST(request: NextRequest) {
     })
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.closemydeals.com'
-    const websocketPort = process.env.WEBSOCKET_PORT || 3001
 
+    // Fix WebSocket URL for media streaming
+    const wsUrl = baseUrl.replace('https://', 'wss://').replace('http://', 'ws://')
+    
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
         <Start>
-          <Stream url="wss://${new URL(baseUrl).host}:${websocketPort}/api/twilio/media-stream">
+          <Stream url="${wsUrl}/api/twilio/media-stream">
             <Parameter name="callSid" value="${callSid}" />
             <Parameter name="from" value="${from}" />
             <Parameter name="to" value="${to}" />
