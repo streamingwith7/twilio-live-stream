@@ -103,11 +103,20 @@ export interface StreamStatusEvent {
 }
 
 export interface TranscriptionEvents {
-  transcriptionReady: { callSid: string; streamSid: string; timestamp: string }
+  transcriptionReady: { callSid: string; streamSid: string; timestamp: string; status?: string }
   transcriptionEnded: { callSid: string; streamSid: string; timestamp: string }
   transcriptionError: { callSid: string; streamSid: string; error: string; timestamp: string }
   liveTranscript: TranscriptMessage
   utteranceEnd: { callSid: string; streamSid: string; timestamp: string }
   speechStarted: { callSid: string; streamSid: string; timestamp: string }
   streamStatus: StreamStatusEvent
+  transcriptionRoomJoined: { callSid: string; room: string; timestamp: string }
+  transcriptionRoomLeft: { callSid: string; room: string; timestamp: string }
+  transcriptionRoomError: { error: string }
+  transcriptionStatus: { callSid: string; streamSid?: string; status: string; startTime?: string; timestamp: string }
+  transcriptionStatusError: { error: string }
+  roomJoined: { room: string; type: string }
+  roomLeft: { room: string; type: string }
+  heartbeatAck: { clientTimestamp: number; serverTimestamp: number }
+  activeTranscriptions: { transcriptions: Array<{ callSid: string; streamSid: string; startTime: string; timestamp: string }>; count: number; timestamp: string }
 }

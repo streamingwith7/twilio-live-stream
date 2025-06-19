@@ -48,6 +48,8 @@ app.prepare().then(() => {
       res.end('internal server error');
     }
   });
+  // Socket.IO Server Setup with Room Management
+  // Supports both call rooms and transcription rooms for organized event handling
   const io = new Server(httpServer, {
     cors: {
       origin: dev ? 'http://localhost:3000' : process.env.NEXT_PUBLIC_SITE_URL,
@@ -73,14 +75,114 @@ app.prepare().then(() => {
     socket.on('disconnect', () => {
       console.log(`🔌 Socket.IO client disconnected: ${socket.id}`);
     });
+    
     // Allow clients to join specific call rooms for targeted updates
     socket.on('joinCallRoom', (callSid) => {
       socket.join(`call_${callSid}`);
       console.log(`📞 Socket ${socket.id} joined room for call ${callSid}`);
+      socket.emit('roomJoined', { room: `call_${callSid}`, type: 'call' });
     });
+    
     socket.on('leaveCallRoom', (callSid) => {
       socket.leave(`call_${callSid}`);
       console.log(`📞 Socket ${socket.id} left room for call ${callSid}`);
+      socket.emit('roomLeft', { room: `call_${callSid}`, type: 'call' });
+    });
+
+    // Transcription room handlers
+    socket.on('joinTranscriptionRoom', (callSid) => {
+      if (!callSid) {
+        socket.emit('transcriptionRoomError', { error: 'CallSid is required' });
+        return;
+      }
+      
+      const transcriptionRoom = `transcription_${callSid}`;
+      socket.join(transcriptionRoom);
+      console.log(`🎙️ Socket ${socket.id} joined transcription room for call ${callSid}`);
+      
+      // Notify the client they've joined the transcription room
+      socket.emit('transcriptionRoomJoined', { 
+        callSid, 
+        room: transcriptionRoom,
+        timestamp: new Date().toISOString()
+      });
+
+      // If there's an active transcription stream for this call, notify the client
+      const activeStream = activeStreams.get(callSid);
+      if (activeStream) {
+        socket.emit('transcriptionReady', {
+          callSid,
+          streamSid: activeStream.streamSid,
+          timestamp: new Date().toISOString(),
+          status: 'active'
+        });
+      }
+    });
+
+    socket.on('leaveTranscriptionRoom', (callSid) => {
+      if (!callSid) {
+        socket.emit('transcriptionRoomError', { error: 'CallSid is required' });
+        return;
+      }
+      
+      const transcriptionRoom = `transcription_${callSid}`;
+      socket.leave(transcriptionRoom);
+      console.log(`🎙️ Socket ${socket.id} left transcription room for call ${callSid}`);
+      
+      socket.emit('transcriptionRoomLeft', { 
+        callSid, 
+        room: transcriptionRoom,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    // Request transcription status for a specific call
+    socket.on('requestTranscriptionStatus', (callSid) => {
+      if (!callSid) {
+        socket.emit('transcriptionStatusError', { error: 'CallSid is required' });
+        return;
+      }
+
+      const activeStream = activeStreams.get(callSid);
+      if (activeStream) {
+        socket.emit('transcriptionStatus', {
+          callSid,
+          streamSid: activeStream.streamSid,
+          status: 'active',
+          startTime: activeStream.startTime,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        socket.emit('transcriptionStatus', {
+          callSid,
+          status: 'inactive',
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
+    // Heartbeat handler for connection monitoring
+    socket.on('heartbeat', (data) => {
+      socket.emit('heartbeatAck', { 
+        clientTimestamp: data.timestamp,
+        serverTimestamp: Date.now()
+      });
+    });
+
+    // Get list of active transcription sessions
+    socket.on('getActiveTranscriptions', () => {
+      const activeTranscriptions = Array.from(activeStreams.entries()).map(([callSid, stream]) => ({
+        callSid,
+        streamSid: stream.streamSid,
+        startTime: stream.startTime,
+        timestamp: new Date().toISOString()
+      }));
+
+      socket.emit('activeTranscriptions', {
+        transcriptions: activeTranscriptions,
+        count: activeTranscriptions.length,
+        timestamp: new Date().toISOString()
+      });
     });
   });
   const wss = new WebSocket.Server({
@@ -140,8 +242,14 @@ app.prepare().then(() => {
               timestamp: new Date().toISOString()
             });
             
-            // Also notify specific call room
+            // Also notify specific call room and transcription room
             io.to(`call_${callSid}`).emit('transcriptionReady', { 
+              callSid, 
+              streamSid,
+              timestamp: new Date().toISOString()
+            });
+            
+            io.to(`transcription_${callSid}`).emit('transcriptionReady', { 
               callSid, 
               streamSid,
               timestamp: new Date().toISOString()
@@ -158,6 +266,12 @@ app.prepare().then(() => {
             });
             
             io.to(`call_${callSid}`).emit('transcriptionEnded', { 
+              callSid, 
+              streamSid,
+              timestamp: new Date().toISOString()
+            });
+            
+            io.to(`transcription_${callSid}`).emit('transcriptionEnded', { 
               callSid, 
               streamSid,
               timestamp: new Date().toISOString()
@@ -185,8 +299,9 @@ app.prepare().then(() => {
               // Emit to all clients
               io.emit('liveTranscript', transcriptData);
               
-              // Also emit to specific call room
+              // Also emit to specific call room and transcription room
               io.to(`call_${callSid}`).emit('liveTranscript', transcriptData);
+              io.to(`transcription_${callSid}`).emit('liveTranscript', transcriptData);
             }
           });
           deepgramConnection.on(LiveTranscriptionEvents.UtteranceEnd, (data) => {
@@ -199,6 +314,7 @@ app.prepare().then(() => {
             console.log(`🎙️ Utterance end for call ${callSid}`);
             io.emit('utteranceEnd', utteranceData);
             io.to(`call_${callSid}`).emit('utteranceEnd', utteranceData);
+            io.to(`transcription_${callSid}`).emit('utteranceEnd', utteranceData);
           });
           deepgramConnection.on(LiveTranscriptionEvents.SpeechStarted, (data) => {
             const speechData = { 
@@ -210,6 +326,7 @@ app.prepare().then(() => {
             console.log(`🎙️ Speech started for call ${callSid}`);
             io.emit('speechStarted', speechData);
             io.to(`call_${callSid}`).emit('speechStarted', speechData);
+            io.to(`transcription_${callSid}`).emit('speechStarted', speechData);
           });
           deepgramConnection.on(LiveTranscriptionEvents.Metadata, (data) => {
             console.log(`🎙️ Deepgram metadata for call ${callSid}:`, data);
@@ -226,6 +343,7 @@ app.prepare().then(() => {
             
             io.emit('transcriptionError', errorData);
             io.to(`call_${callSid}`).emit('transcriptionError', errorData);
+            io.to(`transcription_${callSid}`).emit('transcriptionError', errorData);
           });
           break;
         case 'media':

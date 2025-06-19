@@ -10,6 +10,7 @@ import LiveStreamPlayer from '@/components/LiveStreamPlayer'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import ActiveCallControls from '@/components/ActiveCallControls'
 import IncomingCallModal from '@/components/IncomingCallModal'
+import RealTimeTranscription from '@/components/RealTimeTranscription'
 import { useVoiceClient } from '@/hooks/useVoiceClient'
 
 interface ActiveCall {
@@ -31,6 +32,8 @@ export default function MakeCallPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [incomingCall, setIncomingCall] = useState<any>(null)
   const [callDuration, setCallDuration] = useState(0)
+  const [activeCallSid, setActiveCallSid] = useState<string | undefined>(undefined)
+  const [isCallActive, setIsCallActive] = useState(false)
   const router = useRouter()
 
   // Voice client handlers
@@ -51,11 +54,15 @@ export default function MakeCallPage() {
   const handleCallStatusChange = useCallback((status: string, call: any) => {
     if (status === 'connected') {
       setIncomingCall(null)
+      setActiveCallSid(call.sid)
+      setIsCallActive(true)
       setSuccess('Call connected successfully')
       setTimeout(() => setSuccess(null), 3000)
     } else if (status === 'disconnected' || status === 'cancelled' || status === 'rejected') {
       setIncomingCall(null)
       setCallDuration(0)
+      setIsCallActive(false)
+      setActiveCallSid(undefined)
       if (status === 'disconnected') {
         setSuccess('Call ended')
         setTimeout(() => setSuccess(null), 3000)
@@ -106,6 +113,8 @@ export default function MakeCallPage() {
     newSocket.on('callInitiated', (data: ActiveCall) => {
       console.log('Call initiated:', data)
       setActiveCalls(prev => [...prev, data])
+      setActiveCallSid(data.callSid)
+      setIsCallActive(true)
       setSuccess(`Call initiated to ${data.to}`)
       setTimeout(() => setSuccess(null), 5000)
     })
@@ -120,8 +129,12 @@ export default function MakeCallPage() {
         )
       )
 
-      // Remove completed calls after a delay
+      // Remove completed calls after a delay and update call state
       if (['completed', 'failed', 'busy', 'no-answer'].includes(data.status)) {
+        if (data.callSid === activeCallSid) {
+          setIsCallActive(false)
+          setActiveCallSid(undefined)
+        }
         setTimeout(() => {
           setActiveCalls(prev => prev.filter(call => call.callSid !== data.callSid))
         }, 10000) // Remove after 10 seconds
@@ -397,6 +410,15 @@ export default function MakeCallPage() {
                   </div>
                   </div>
                 )}
+
+              {/* Real-Time Transcription Widget */}
+              <div>
+                <RealTimeTranscription 
+                  callSid={activeCallSid}
+                  isCallActive={isCallActive}
+                  onError={handleError}
+                />
+              </div>
 
               {/* Help Text */}
               {!isVoiceCallActive && activeCalls.length === 0 && (
