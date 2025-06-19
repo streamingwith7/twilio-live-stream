@@ -57,6 +57,9 @@ app.prepare().then(() => {
       credentials: true,
     },
   });
+
+  // Make io available globally for webhook routes
+  global.io = io;
   io.use((socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) {

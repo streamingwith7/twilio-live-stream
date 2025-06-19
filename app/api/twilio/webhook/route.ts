@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import twilio from 'twilio'
+
 
 export async function POST(request: NextRequest) {
   try {
@@ -68,49 +70,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('Real-time call status update:', callUpdate)
 
-          // For calls that are answered, start streaming for real-time transcription
+      const languageCode = 'en-US';
+      const track = 'both_tracks';
       if (callStatus === 'in-progress') {
-        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.closemydeals.com'
-        
-        // Fix WebSocket URL for media streaming
-        const wsUrl = baseUrl.replace('https://', 'wss://').replace('http://', 'ws://')
-        
-        // Check if this is an inbound call to a connected number
-        // For now, we'll create a conference room for the call
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-          <Response>
-            <Say voice="alice">Welcome to Closemydeals. Please hold while we connect you to an agent.</Say>
-            <Start>
-              <Stream url="${wsUrl}/api/twilio/media-stream">
-              <Parameter name="callSid" value="${callSid}" />
-              <Parameter name="phoneNumber" value="${callRecord.phoneNumber}" />
-              <Parameter name="from" value="${from}" />
-              <Parameter name="to" value="${to}" />
-              <Parameter name="direction" value="${direction}" />
-              <Parameter name="platform" value="closemydeals" />
-            </Stream>
+        console.log('inprogress');
+        const twiml = `
+        <Response>
+          <Start>
+            <Transcription 
+              statusCallbackUrl="https://closemydeals.com/api/twilio/transcription-webhook"
+              languageCode="${languageCode}"
+              track="${track}"
+              partialResults="true"
+              enableAutomaticPunctuation="true"
+              profanityFilter="false"
+            />
           </Start>
-          <Dial>
-            <Conference 
-              statusCallback="${baseUrl}/api/twilio/conference-status"
-              statusCallbackMethod="POST"
-              statusCallbackEvent="start end join leave mute hold"
-              record="record-from-start"
-              recordingStatusCallback="${baseUrl}/api/twilio/recording-status"
-              recordingStatusCallbackMethod="POST"
-              waitUrl=""
-              waitMethod="GET"
-              maxParticipants="10"
-              startConferenceOnEnter="true"
-              endConferenceOnExit="false"
-            >
-              closemydeals-${callSid}
-            </Conference>
-          </Dial>
-          <Say voice="alice">Thank you for calling Closemydeals. Have a great day!</Say>
-        </Response>`
+          <Pause length="3600"/>
+        </Response>
+        `
       
       return new NextResponse(twiml, {
         headers: { 'Content-Type': 'text/xml' }

@@ -3,9 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(request: NextRequest) {
   try {
     console.log('🔔 Voice webhook received!')
-    
+
     const body = await request.formData()
-    
+
     const from = body.get('From') as string
     const to = body.get('To') as string
     const callSid = body.get('CallSid') as string
@@ -28,20 +28,20 @@ export async function POST(request: NextRequest) {
     console.log('📞 Call type:', isOutboundBrowserCall ? 'Outbound Browser Call' : 'Incoming Call')
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://closemydeals.com'
-    
+
     // Fix WebSocket URL for media streaming
     const wsUrl = baseUrl.replace('https://', 'wss://').replace('http://', 'ws://')
-    
+
     let twiml = ''
 
     if (isOutboundBrowserCall) {
       // Handle outbound calls from browser to phone
       console.log('🚀 Handling outbound browser call from', from, 'to', to)
-      
+
       // For browser calls, use the CallerId parameter passed from the client
       // This contains the selected phone number from the dialer
       const callerId = (body.get('CallerId') as string) || process.env.TWILIO_PHONE_NUMBER
-      
+
       if (!callerId) {
         console.error('❌ No caller ID available for outbound call')
         twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -50,19 +50,23 @@ export async function POST(request: NextRequest) {
             <Hangup />
           </Response>`
       } else {
-        // For outbound calls, we need to dial the destination phone number
-        twiml = `<?xml version="1.0" encoding="UTF-8"?>
-          <Response>
-            <Start>
-              <Stream url="${wsUrl}/api/twilio/media-stream">
-                <Parameter name="callSid" value="${callSid}" />
-                <Parameter name="from" value="${from}" />
-                <Parameter name="to" value="${to}" />
-                <Parameter name="direction" value="outbound" />
-                <Parameter name="callType" value="browser-call" />
-              </Stream>
-            </Start>
-            <Dial callerId="${callerId}" 
+
+        const languageCode = 'en-US';
+        const track = 'both_tracks';
+        console.log('tracking working');
+        twiml = `
+        <Response>
+          <Start>
+            <Transcription 
+              statusCallbackUrl="https://closemydeals.com/api/twilio/transcription-webhook"
+              languageCode="${languageCode}"
+              track="${track}"
+              partialResults="true"
+              enableAutomaticPunctuation="true"
+              profanityFilter="false"
+            />
+          </Start>
+          <Dial callerId="${callerId}" 
                   timeout="30" 
                   record="record-from-start"
                   recordingStatusCallback="${baseUrl}/api/twilio/recording-status"
@@ -73,7 +77,7 @@ export async function POST(request: NextRequest) {
             </Dial>
             <Say voice="alice">The call could not be completed. Please try again later.</Say>
             <Hangup />
-          </Response>`
+        </Response>`
       }
       
       console.log('📝 Returning outbound browser call TwiML for', to)
@@ -92,7 +96,7 @@ export async function POST(request: NextRequest) {
         
         // Get list of connected clients that might be able to receive calls
         const sockets = await global.io.fetchSockets()
-        availableClientIds = sockets.map((socket, index) => `user_${index + 1}`).slice(0, 5)
+        availableClientIds = sockets.map((socket, index) => `user_${ index + 1 } `).slice(0, 5)
         
         const callData = {
           callSid,
@@ -115,16 +119,16 @@ export async function POST(request: NextRequest) {
       if (connectedClients > 0) {
         // Try to dial the first few available clients
         for (let i = 1; i <= Math.min(5, connectedClients); i++) {
-          clientDialXML += `          <Client>user_${i}</Client>\n`
-        }
-      } else {
-        // Fallback to default clients if no Socket.IO info available
-        clientDialXML = `          <Client>user_1</Client>
+          clientDialXML += `          < Client > user_${ i } </Client>\n`
+      }
+    } else {
+      // Fallback to default clients if no Socket.IO info available
+      clientDialXML = `          <Client>user_1</Client>
           <Client>user_2</Client>
           <Client>user_3</Client>`
-      }
+    }
 
-      twiml = `<?xml version="1.0" encoding="UTF-8"?>
+    twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
           <Say voice="alice">You have reached Close My Deals. Connecting you to an agent now.</Say>
           <Dial timeout="20" 
@@ -147,32 +151,32 @@ ${clientDialXML}
           <Hangup />
         </Response>`
 
-      console.log('📝 Returning incoming call TwiML')
-      console.log('🎯 Trying to dial clients:', availableClientIds.length > 0 ? availableClientIds : 'default list')
-    }
+    console.log('📝 Returning incoming call TwiML')
+    console.log('🎯 Trying to dial clients:', availableClientIds.length > 0 ? availableClientIds : 'default list')
+  }
 
     return new NextResponse(twiml, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/xml',
-      },
-    })
+    status: 200,
+    headers: {
+      'Content-Type': 'application/xml',
+    },
+  })
 
-  } catch (error: any) {
-    console.error('❌ Voice webhook error:', error)
-    console.error('Error stack:', error.stack)
-    
-    const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+} catch (error: any) {
+  console.error('❌ Voice webhook error:', error)
+  console.error('Error stack:', error.stack)
+
+  const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
         <Say voice="alice">We're sorry, but we're experiencing technical difficulties. Please try again later.</Say>
         <Hangup />
       </Response>`
 
-    return new NextResponse(errorTwiml, {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/xml',
-      },
-    })
-  }
+  return new NextResponse(errorTwiml, {
+    status: 500,
+    headers: {
+      'Content-Type': 'application/xml',
+    },
+  })
+}
 } 
