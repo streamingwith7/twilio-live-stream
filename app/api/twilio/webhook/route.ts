@@ -58,45 +58,15 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString()
     }
 
-    // Broadcast the update to all connected clients via Socket.IO
     if (global.io) {
       global.io.emit('callStatusUpdate', callUpdate)
       
-      // Also emit specific events for real-time UI updates
       if (callStatus === 'ringing') {
         global.io.emit('incomingCall', callUpdate)
       } else if (callStatus === 'completed') {
         global.io.emit('callCompleted', callUpdate)
       }
     }
-
-
-      const languageCode = 'en-US';
-      const track = 'both_tracks';
-      if (callStatus === 'in-progress') {
-        console.log('inprogress');
-        const twiml = `
-        <Response>
-          <Start>
-            <Transcription 
-              statusCallbackUrl="https://closemydeals.com/api/twilio/transcription-webhook"
-              languageCode="${languageCode}"
-              track="${track}"
-              partialResults="true"
-              enableAutomaticPunctuation="true"
-              profanityFilter="false"
-            />
-          </Start>
-          <Pause length="3600"/>
-        </Response>
-        `
-      
-      return new NextResponse(twiml, {
-        headers: { 'Content-Type': 'text/xml' }
-      })
-    }
-
-    // For other statuses, return empty TwiML
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
       </Response>`
@@ -107,8 +77,6 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Webhook error:', error)
-    
-    // Return error TwiML
     const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
         <Say voice="alice">We're sorry, but we're experiencing technical difficulties. Please try again later.</Say>

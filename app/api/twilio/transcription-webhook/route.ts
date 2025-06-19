@@ -50,15 +50,14 @@ export async function POST(request: NextRequest) {
         const final = body.get('Final') as string
         const stability = body.get('Stability') as string
 
-        console.log('📝 Transcription content:', {
-          callSid,
-          transcriptionData,
-          final,
-          track,
-          languageCode
-        })
+        // console.log('📝 Transcription content:', {
+        //   callSid,
+        //   transcriptionData,
+        //   final,
+        //   track,
+        //   languageCode
+        // })
 
-        // Broadcast transcript content to connected clients
         if (global.io) {
           const transcriptEvent = {
             CallSid: callSid,

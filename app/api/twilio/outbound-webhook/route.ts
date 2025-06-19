@@ -17,26 +17,9 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString()
     })
 
-    // Check if global.io is available
     if (!global.io) {
       console.error('❌ global.io is not available in outbound webhook')
     }
-
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.closemydeals.com'
-
-    // Fix WebSocket URL for media streaming
-    const wsUrl = baseUrl.replace('https://', 'wss://').replace('http://', 'ws://')
-    
-    // <Start>
-    //       <Stream url="${wsUrl}/api/twilio/media-stream">
-    //         <Parameter name="callSid" value="${callSid}" />
-    //         <Parameter name="from" value="${from}" />
-    //         <Parameter name="to" value="${to}" />
-    //         <Parameter name="direction" value="outbound" />
-    //         <Parameter name="platform" value="closemydeals" />
-    //         <Parameter name="callType" value="platform-initiated" />
-    //       </Stream>
-    //     </Start>
 
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
@@ -46,7 +29,6 @@ export async function POST(request: NextRequest) {
         <Say voice="alice">The call could not be completed. Thank you for using Closemydeals.</Say>
       </Response>`
 
-    // Broadcast outbound call status
     if (global.io) {
       console.log('✅ Broadcasting outbound call status:', {
         callSid,
@@ -65,7 +47,6 @@ export async function POST(request: NextRequest) {
         timestamp: new Date().toISOString()
       })
 
-      // Join call room for streaming
       global.io.to(`call_${callSid}`).emit('outboundCallConnected', {
         callSid,
         from,

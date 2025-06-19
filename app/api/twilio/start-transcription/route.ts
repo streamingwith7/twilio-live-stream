@@ -25,7 +25,6 @@ export async function POST(request: NextRequest) {
     const client = twilio(accountSid, authToken)
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://closemydeals.com'
 
-    // Check if call is active
     const call = await client.calls(callSid).fetch()
     if (call.status !== 'in-progress') {
       return NextResponse.json(
@@ -53,7 +52,6 @@ export async function POST(request: NextRequest) {
 
     console.log('Started transcription for call:', callSid)
 
-    // Broadcast to connected clients
     if (global.io) {
       global.io.emit('transcriptionStarted', {
         callSid,
@@ -61,7 +59,6 @@ export async function POST(request: NextRequest) {
         timestamp: new Date().toISOString()
       })
 
-      // Emit to specific call room
       global.io.to(`call_${callSid}`).emit('transcriptionStarted', {
         callSid,
         transcriptionSid: transcription.sid,
