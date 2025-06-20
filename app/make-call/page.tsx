@@ -10,6 +10,7 @@ import LiveStreamPlayer from '@/components/LiveStreamPlayer'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import IncomingCallModal from '@/components/IncomingCallModal'
 import RealTimeTranscription from '@/components/RealTimeTranscription'
+import RealTimeCoaching from '@/components/RealTimeCoaching'
 import { useVoiceClient } from '@/hooks/useVoiceClient'
 
 interface ActiveCall {
@@ -57,7 +58,6 @@ export default function MakeCallPage() {
   const handleCallStatusChange = useCallback((status: string, call: any) => {
     if (status === 'connected') {
       setIncomingCall(null)
-      setActiveCallSid(call.sid)
       setIsCallActive(true)
       setSuccess('Call connected successfully')
       setTimeout(() => setSuccess(null), 3000)
@@ -410,13 +410,19 @@ export default function MakeCallPage() {
                         : 'Enter a phone number on the left to start making calls.'
                       }
                     </p>
-            </div>
-          </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>
         </div>
       </main>
+
+      {/* Real-Time AI Coaching Tips */}
+      <RealTimeCoaching 
+        socket={socket}
+        isCallActive={isCallActive || isVoiceCallActive}
+      />
 
       {/* Incoming Call Modal */}
       {incomingCall && (
