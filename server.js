@@ -52,7 +52,7 @@ app.prepare().then(() => {
   // Supports both call rooms and transcription rooms for organized event handling
   const io = new Server(httpServer, {
     cors: {
-      origin: dev ? 'http://localhost:3000' : process.env.NEXT_PUBLIC_SITE_URL,
+      origin: dev ? 'http://localhost:5000' : process.env.NEXT_PUBLIC_SITE_URL,
       methods: ['GET', 'POST'],
       credentials: true,
     },
@@ -68,6 +68,7 @@ app.prepare().then(() => {
     try {
       const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET || 'fallback-secret');
       socket.userId = decoded.userId;
+      socket.handshake.auth.identity = decoded.userId;
       next();
     } catch (err) {
       next(new Error('Authentication error'));

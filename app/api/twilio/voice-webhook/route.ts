@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
         connectedClients = global.io.engine.clientsCount
         
         const sockets = await global.io.fetchSockets()
-        availableClientIds = sockets.map((socket, index) => `user_${ index + 1 } `).slice(0, 5)
+        availableClientIds = sockets.map((socket, index) => `user_${socket.handshake.auth.identity} `).slice(0, 5)
         
         const callData = {
           callSid,
@@ -106,15 +106,12 @@ export async function POST(request: NextRequest) {
         console.error('❌ Socket.IO not available! Cannot notify web clients')
       }
 
-      // Generate TwiML with dynamic client list based on connected clients
       let clientDialXML = ''
       if (connectedClients > 0) {
-        // Try to dial the first few available clients
-        for (let i = 1; i <= Math.min(5, connectedClients); i++) {
-          clientDialXML += `          <Client>user_${i}</Client>\n`
+        for (const clientId of availableClientIds) {
+          clientDialXML += `          <Client>${clientId}</Client>\n`
         }
       } else {
-        // Fallback to default clients if no Socket.IO info available
         clientDialXML = `          <Client>user_1</Client>
           <Client>user_2</Client>
           <Client>user_3</Client>`
@@ -122,6 +119,16 @@ export async function POST(request: NextRequest) {
 
     twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
+        <Start>
+            <Transcription 
+              statusCallbackUrl="https://closemydeals.com/api/twilio/transcription-webhook"
+              languageCode="en-US"
+              track="both_tracks"
+              partialResults="true"
+              enableAutomaticPunctuation="true"
+              profanityFilter="false"
+            />
+          </Start>
           <Say voice="alice">You have reached Close My Deals. Connecting you to an agent now.</Say>
           <Dial timeout="20" 
                 record="record-from-answer" 
@@ -144,7 +151,6 @@ ${clientDialXML}
         </Response>`
 
     console.log('📝 Returning incoming call TwiML')
-    console.log('🎯 Trying to dial clients:', availableClientIds.length > 0 ? availableClientIds : 'default list')
   }
 
     return new NextResponse(twiml, {

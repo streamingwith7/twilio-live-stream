@@ -8,7 +8,6 @@ import Navigation from '@/components/Navigation'
 import Dialer from '@/components/Dialer'
 import LiveStreamPlayer from '@/components/LiveStreamPlayer'
 import LoadingSpinner from '@/components/LoadingSpinner'
-import ActiveCallControls from '@/components/ActiveCallControls'
 import IncomingCallModal from '@/components/IncomingCallModal'
 import RealTimeTranscription from '@/components/RealTimeTranscription'
 import { useVoiceClient } from '@/hooks/useVoiceClient'
@@ -347,24 +346,6 @@ export default function MakeCallPage() {
 
             {/* Right Column - Active Call Controls or Server-side Calls */}
             <div className="space-y-6">
-              {/* Browser Call Controls */}
-              {isVoiceCallActive && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Active Browser Call</h3>
-                  <ActiveCallControls
-                    callStatus={voiceClient.callStatus}
-                    callerNumber={voiceClient.activeCall?.remoteNumber || 'Unknown'}
-                    isMuted={voiceClient.isMuted}
-                    volume={voiceClient.volume}
-                    onMute={handleMuteToggle}
-                    onHangup={handleHangupCall}
-                    onVolumeChange={handleVolumeChange}
-                    callDuration={callDuration}
-                  />
-                </div>
-              )}
-
-              {/* Server-side Active Calls */}
               {activeCalls.length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
