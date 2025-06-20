@@ -4,7 +4,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.formData()
     
-    // Extract transcription event data from Twilio webhook
     const accountSid = body.get('AccountSid') as string
     const callSid = body.get('CallSid') as string
     const transcriptionSid = body.get('TranscriptionSid') as string
@@ -12,21 +11,10 @@ export async function POST(request: NextRequest) {
     const timestamp = body.get('Timestamp') as string
     const sequenceId = body.get('SequenceId') as string
 
-    console.log('Transcription webhook received:', {
-      accountSid,
-      callSid,
-      transcriptionSid,
-      transcriptionEvent,
-      timestamp,
-      sequenceId
-    })
-
-    // Handle different transcription events
     switch (transcriptionEvent) {
       case 'transcription-started':
         console.log('🎙️ Transcription started for call:', callSid)
         
-        // Broadcast to connected clients
         if (global.io) {
           global.io.emit('transcriptionStarted', {
             callSid,
@@ -34,7 +22,6 @@ export async function POST(request: NextRequest) {
             timestamp
           })
 
-          // Emit to specific call room
           global.io.to(`call_${callSid}`).emit('transcriptionStarted', {
             callSid,
             transcriptionSid,

@@ -90,14 +90,25 @@ export default function BrowserCallingPage() {
     newSocket.on('incomingCall', (data: any) => {
       console.log('🔔 Incoming call received via Socket.IO:', data)
       
-      // Don't show modal for this - just prepare for the incoming browser call
-      // The Twilio Voice SDK will handle showing the actual call modal
+      // Join the call room for this specific call
+      newSocket.emit('joinCallRoom', data.callSid)
       
       // Show a brief notification that a call is incoming
-      setSuccess(`Incoming call from ${data.from} - Connecting...`)
-      setTimeout(() => setSuccess(null), 3000)
+      setSuccess(`Incoming call from ${data.from} - Preparing to connect...`)
+      setTimeout(() => setSuccess(null), 5000)
       
-      console.log('📱 Incoming call prepared - Twilio Voice SDK will handle the actual call')
+      console.log('📱 Incoming call prepared - waiting for Twilio Voice SDK to handle the actual call')
+    })
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Socket.IO connection error:', error)
+      setError('Connection to call server failed')
+    })
+
+    newSocket.on('reconnect', (attemptNumber) => {
+      console.log('Socket.IO reconnected after', attemptNumber, 'attempts')
+      setSuccess('Reconnected to call server')
+      setTimeout(() => setSuccess(null), 3000)
     })
 
     setSocket(newSocket)

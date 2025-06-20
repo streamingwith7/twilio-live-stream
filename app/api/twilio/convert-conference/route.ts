@@ -37,7 +37,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }, { status: 400 });
     }
 
-    // Fix WebSocket URL for media streaming
     const wsUrl = baseURL.replace('https://', 'wss://').replace('http://', 'ws://')
     
     const stream = await client.calls(callSid).streams.create({

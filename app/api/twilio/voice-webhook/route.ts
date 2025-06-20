@@ -29,17 +29,13 @@ export async function POST(request: NextRequest) {
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://closemydeals.com'
 
-    // Fix WebSocket URL for media streaming
     const wsUrl = baseUrl.replace('https://', 'wss://').replace('http://', 'ws://')
 
     let twiml = ''
 
     if (isOutboundBrowserCall) {
-      // Handle outbound calls from browser to phone
       console.log('🚀 Handling outbound browser call from', from, 'to', to)
 
-      // For browser calls, use the CallerId parameter passed from the client
-      // This contains the selected phone number from the dialer
       const callerId = (body.get('CallerId') as string) || process.env.TWILIO_PHONE_NUMBER
 
       if (!callerId) {
@@ -50,7 +46,6 @@ export async function POST(request: NextRequest) {
             <Hangup />
           </Response>`
       } else {
-
         const languageCode = 'en-US';
         const track = 'both_tracks';
         console.log('tracking working');
@@ -83,10 +78,8 @@ export async function POST(request: NextRequest) {
       console.log('📝 Returning outbound browser call TwiML for', to)
       
     } else {
-      // Handle incoming calls from phone to browser
       console.log('📞 Handling incoming call - notifying web clients')
       
-      // Notify web clients about incoming call immediately
       let connectedClients = 0
       let availableClientIds: string[] = []
       
@@ -94,7 +87,6 @@ export async function POST(request: NextRequest) {
         console.log('📡 Broadcasting incoming call to web clients')
         connectedClients = global.io.engine.clientsCount
         
-        // Get list of connected clients that might be able to receive calls
         const sockets = await global.io.fetchSockets()
         availableClientIds = sockets.map((socket, index) => `user_${ index + 1 } `).slice(0, 5)
         
@@ -119,14 +111,14 @@ export async function POST(request: NextRequest) {
       if (connectedClients > 0) {
         // Try to dial the first few available clients
         for (let i = 1; i <= Math.min(5, connectedClients); i++) {
-          clientDialXML += `          < Client > user_${ i } </Client>\n`
-      }
-    } else {
-      // Fallback to default clients if no Socket.IO info available
-      clientDialXML = `          <Client>user_1</Client>
+          clientDialXML += `          <Client>user_${i}</Client>\n`
+        }
+      } else {
+        // Fallback to default clients if no Socket.IO info available
+        clientDialXML = `          <Client>user_1</Client>
           <Client>user_2</Client>
           <Client>user_3</Client>`
-    }
+      }
 
     twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>

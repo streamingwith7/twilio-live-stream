@@ -43,15 +43,15 @@ export function useVoiceClient({
       const { Device } = await import('@twilio/voice-sdk')
 
       // Get access token from our API
-      const token = await getAccessToken()
+      const tokenData = await getAccessToken()
       
-      if (!token) {
+      if (!tokenData) {
         onError?.('Failed to get voice access token')
         return
       }
 
       // Initialize Twilio Device with enhanced configuration
-      const newDevice = new Device(token, {
+      const newDevice = new Device(tokenData.token, {
         logLevel: 'debug',
         // Add edge locations for better connectivity
         edge: ['sydney', 'dublin', 'tokyo'],
@@ -72,17 +72,24 @@ export function useVoiceClient({
         setDevice(newDevice)
         setIsReady(true)
 
-        console.log('Twilio Device initialized and registered successfully')
+        console.log('Twilio Device initialized and registered successfully with identity:', tokenData.identity)
       } catch (registerError: any) {
-        console.error('Device registration failed:', registerError)
+        console.error('Device registration failed:', {
+          error: registerError,
+          code: registerError.code,
+          message: registerError.message,
+          identity: tokenData.identity
+        })
         
         // More specific error handling for registration failures
         if (registerError.code === 31005) {
           onError?.('WebSocket connection failed. Please check your internet connection and try again.')
         } else if (registerError.code === 31204) {
           onError?.('Invalid access token. Please refresh the page and try again.')
+        } else if (registerError.code === 31301) {
+          onError?.('TwiML Application SID is invalid. Please check your Twilio configuration.')
         } else {
-          onError?.(`Device registration failed: ${registerError.message}`)
+          onError?.(`Device registration failed: ${registerError.message} (Code: ${registerError.code})`)
         }
         return
       }
@@ -184,12 +191,12 @@ export function useVoiceClient({
     })
   }
 
-  const getAccessToken = async (): Promise<string | null> => {
+  const getAccessToken = async (): Promise<{token: string, identity: string} | null> => {
     try {
       const token = localStorage.getItem('token')
       
-      // Use a simple, predictable identity for easier TwiML dialing
-      const identity = `user_1` // Default to user_1, could be made dynamic later
+      // Use a consistent identity based on user ID for easier TwiML dialing
+      const identity = `user_${user.id}` || `user_1`
       
       const response = await fetch('/api/twilio/voice-token', {
         method: 'POST',
@@ -207,7 +214,7 @@ export function useVoiceClient({
 
       if (response.ok) {
         console.log('🎯 Voice client registered with identity:', identity)
-        return data.token
+        return { token: data.token, identity }
       } else {
         throw new Error(data.error || 'Failed to get access token')
       }
@@ -219,10 +226,10 @@ export function useVoiceClient({
 
   const refreshToken = async () => {
     try {
-      const token = await getAccessToken()
-      if (token && deviceRef.current) {
-        deviceRef.current.updateToken(token)
-        console.log('Access token refreshed')
+      const tokenData = await getAccessToken()
+      if (tokenData && deviceRef.current) {
+        deviceRef.current.updateToken(tokenData.token)
+        console.log('Access token refreshed for identity:', tokenData.identity)
       }
     } catch (error) {
       console.error('Token refresh error:', error)
