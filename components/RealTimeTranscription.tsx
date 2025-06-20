@@ -41,7 +41,7 @@ export default function RealTimeTranscription({
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token || !isCallActive) return
-
+    console.log('activeCallSid ----------------> ', callSid);
     const newSocket = io({
       auth: { token },
       transports: ['polling', 'websocket'],
@@ -53,8 +53,8 @@ export default function RealTimeTranscription({
     })
 
     newSocket.on('connect', () => {
-      console.log('📞 Connected to transcription socket')
       if (callSid) {
+        console.log('📞 Connected to transcription socket', callSid)
         newSocket.emit('joinTranscriptionRoom', callSid)
       }
     })

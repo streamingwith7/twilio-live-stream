@@ -80,7 +80,6 @@ app.prepare().then(() => {
       console.log(`🔌 Socket.IO client disconnected: ${socket.id}`);
     });
     
-    // Allow clients to join specific call rooms for targeted updates
     socket.on('joinCallRoom', (callSid) => {
       socket.join(`call_${callSid}`);
       console.log(`📞 Socket ${socket.id} joined room for call ${callSid}`);

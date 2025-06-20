@@ -50,6 +50,10 @@ export default function MakeCallPage() {
     })
   }, [])
 
+  useEffect(() => {
+    console.log('activeCallSid ----------------> ', activeCallSid);
+  }, [activeCallSid])
+
   const handleCallStatusChange = useCallback((status: string, call: any) => {
     if (status === 'connected') {
       setIncomingCall(null)
@@ -155,23 +159,14 @@ export default function MakeCallPage() {
     newSocket.on('incomingCall', (data: any) => {
       console.log('🔔 Incoming call received via Socket.IO:', data)
       
-      // Set incoming call for modal display
       setIncomingCall({
         callSid: data.callSid,
         from: data.from,
         to: data.to,
         timestamp: data.timestamp
       })
-      
-      // Also add to active calls list
-      setActiveCalls(prev => [...prev, {
-        callSid: data.callSid,
-        from: data.from,
-        to: data.to,
-        status: data.status || 'ringing',
-        direction: 'inbound',
-        timestamp: data.timestamp
-      }])
+
+      setActiveCallSid(data.callSid);
 
       console.log('📱 Incoming call modal should now be visible')
     })
