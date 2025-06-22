@@ -387,15 +387,6 @@ export default function MakeCallPage() {
                   </div>
                 )}
 
-              {/* Real-Time Transcription Widget */}
-              <div>
-                <RealTimeTranscription 
-                  callSid={activeCallSid}
-                  isCallActive={isCallActive}
-                  onError={handleError}
-                />
-              </div>
-
               {/* Help Text */}
               {!isVoiceCallActive && activeCalls.length === 0 && (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -415,6 +406,35 @@ export default function MakeCallPage() {
               )}
             </div>
           </div>
+
+          {/* Real-Time Transcription Widget - Separated and Less Prominent */}
+          {(isCallActive || isVoiceCallActive) && (
+            <div className="mt-8">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                <details className="group">
+                  <summary className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50 rounded">
+                    <div className="flex items-center space-x-2">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                      </svg>
+                      <span className="text-sm font-medium text-gray-700">Live Transcription</span>
+                      <span className="text-xs text-gray-400">(Optional - Click to view)</span>
+                    </div>
+                    <svg className="w-4 h-4 text-gray-400 group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </summary>
+                  <div className="border-t border-gray-100">
+                    <RealTimeTranscription 
+                      callSid={activeCallSid}
+                      isCallActive={isCallActive}
+                      onError={handleError}
+                    />
+                  </div>
+                </details>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
