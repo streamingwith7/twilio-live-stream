@@ -28,13 +28,15 @@ app.prepare().then(() => {
           const streamStatus = parsedBody.get('StreamEvent');
           console.log(`🔄 Stream Status: SID=${streamSid}, Call=${callSid}, Status=${streamStatus}`);
           
-          // Emit stream status to connected clients
-          io.emit('streamStatus', { 
-            streamSid, 
-            callSid, 
-            status: streamStatus,
-            timestamp: new Date().toISOString()
-          });
+          // Only emit stream status to specific call room, not broadcast
+          if (callSid) {
+            io.to(`call_${callSid}`).emit('streamStatus', { 
+              streamSid, 
+              callSid, 
+              status: streamStatus,
+              timestamp: new Date().toISOString()
+            });
+          }
           
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ received: true }));
@@ -90,6 +92,41 @@ app.prepare().then(() => {
       socket.leave(`call_${callSid}`);
       console.log(`📞 Socket ${socket.id} left room for call ${callSid}`);
       socket.emit('roomLeft', { room: `call_${callSid}`, type: 'call' });
+    });
+
+    // Coaching room handlers
+    socket.on('joinCoachingRoom', (callSid) => {
+      if (!callSid) {
+        socket.emit('coachingRoomError', { error: 'CallSid is required' });
+        return;
+      }
+      
+      const coachingRoom = `coaching_${callSid}`;
+      socket.join(coachingRoom);
+      console.log(`🤖 Socket ${socket.id} joined coaching room for call ${callSid}`);
+      
+      socket.emit('coachingRoomJoined', { 
+        callSid, 
+        room: coachingRoom,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    socket.on('leaveCoachingRoom', (callSid) => {
+      if (!callSid) {
+        socket.emit('coachingRoomError', { error: 'CallSid is required' });
+        return;
+      }
+      
+      const coachingRoom = `coaching_${callSid}`;
+      socket.leave(coachingRoom);
+      console.log(`🤖 Socket ${socket.id} left coaching room for call ${callSid}`);
+      
+      socket.emit('coachingRoomLeft', { 
+        callSid, 
+        room: coachingRoom,
+        timestamp: new Date().toISOString()
+      });
     });
 
     // Transcription room handlers
@@ -205,7 +242,6 @@ app.prepare().then(() => {
         case 'start':
           callSid = message.start.callSid;
           streamSid = message.start.streamSid;
-          console.log(`🔗 Media stream started for call: ${callSid}, stream: ${streamSid}`);
           
           const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
           
@@ -238,14 +274,7 @@ app.prepare().then(() => {
           deepgramConnection.on(LiveTranscriptionEvents.Open, () => {
             console.log(`🎙️ Deepgram connection opened for call ${callSid}`);
             
-            // Notify clients that transcription is ready
-            io.emit('transcriptionReady', { 
-              callSid, 
-              streamSid,
-              timestamp: new Date().toISOString()
-            });
-            
-            // Also notify specific call room and transcription room
+            // Only notify specific call room and transcription room, not broadcast
             io.to(`call_${callSid}`).emit('transcriptionReady', { 
               callSid, 
               streamSid,
@@ -261,13 +290,7 @@ app.prepare().then(() => {
           deepgramConnection.on(LiveTranscriptionEvents.Close, () => {
             console.log(`🎙️ Deepgram connection closed for call ${callSid}`);
             
-            // Notify clients that transcription has ended
-            io.emit('transcriptionEnded', { 
-              callSid, 
-              streamSid,
-              timestamp: new Date().toISOString()
-            });
-            
+            // Only notify specific call room and transcription room, not broadcast
             io.to(`call_${callSid}`).emit('transcriptionEnded', { 
               callSid, 
               streamSid,
@@ -299,10 +322,7 @@ app.prepare().then(() => {
                 console.log(`🎙️ Final Transcript [${callSid}]:`, transcript);
               }
               
-              // Emit to all clients
-              io.emit('liveTranscript', transcriptData);
-              
-              // Also emit to specific call room and transcription room
+              // Only emit to specific call room and transcription room, not broadcast
               io.to(`call_${callSid}`).emit('liveTranscript', transcriptData);
               io.to(`transcription_${callSid}`).emit('liveTranscript', transcriptData);
             }
@@ -315,7 +335,7 @@ app.prepare().then(() => {
             };
             
             console.log(`🎙️ Utterance end for call ${callSid}`);
-            io.emit('utteranceEnd', utteranceData);
+            // Only emit to specific call room and transcription room, not broadcast
             io.to(`call_${callSid}`).emit('utteranceEnd', utteranceData);
             io.to(`transcription_${callSid}`).emit('utteranceEnd', utteranceData);
           });
@@ -327,7 +347,7 @@ app.prepare().then(() => {
             };
             
             console.log(`🎙️ Speech started for call ${callSid}`);
-            io.emit('speechStarted', speechData);
+            // Only emit to specific call room and transcription room, not broadcast
             io.to(`call_${callSid}`).emit('speechStarted', speechData);
             io.to(`transcription_${callSid}`).emit('speechStarted', speechData);
           });
@@ -344,7 +364,7 @@ app.prepare().then(() => {
               timestamp: new Date().toISOString()
             };
             
-            io.emit('transcriptionError', errorData);
+            // Only emit to specific call room and transcription room, not broadcast
             io.to(`call_${callSid}`).emit('transcriptionError', errorData);
             io.to(`transcription_${callSid}`).emit('transcriptionError', errorData);
           });

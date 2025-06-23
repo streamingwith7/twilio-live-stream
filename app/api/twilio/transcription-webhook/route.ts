@@ -55,12 +55,8 @@ async function handleCoachingAnalysis(callSid: string, track: string, transcript
       });
 
       if (tip && global.io) {
-        global.io.emit('coachingTip', {
-          ...tip,
-          callSid
-        });
-
-        global.io.to(`call_${callSid}`).emit('coachingTip', {
+        // Only emit to coaching room, not broadcast to all clients
+        global.io.to(`coaching_${callSid}`).emit('coachingTip', {
           ...tip,
           callSid
         });
@@ -91,13 +87,8 @@ export async function POST(request: NextRequest) {
         console.log('🎙️ Transcription started for call:', callSid)
         
         if (global.io) {
-          global.io.emit('transcriptionStarted', {
-            callSid,
-            transcriptionSid,
-            timestamp
-          })
-
-          global.io.to(`call_${callSid}`).emit('transcriptionStarted', {
+          // Only emit to transcription room, not broadcast
+          global.io.to(`transcription_${callSid}`).emit('transcriptionStarted', {
             callSid,
             transcriptionSid,
             timestamp
@@ -127,10 +118,8 @@ export async function POST(request: NextRequest) {
 
           // global.io.emit('transcriptionContent', transcriptEvent)
 
-          // Emit to specific call room
-          global.io.to(`call_${callSid}`).emit('transcriptionContent', transcriptEvent)
+          global.io.to(`transcription_${callSid}`).emit('transcriptionContent', transcriptEvent)
 
-          // AI Coaching: Generate tips when we have final transcription
           if (final === 'true' && transcriptionData && transcriptionData.trim().length > 0) {
             await handleCoachingAnalysis(callSid, track, transcriptionData, timestamp);
           }
@@ -140,16 +129,9 @@ export async function POST(request: NextRequest) {
       case 'transcription-stopped':
         console.log('🛑 Transcription stopped for call:', callSid)
         
-        // Broadcast to connected clients
         if (global.io) {
-          global.io.emit('transcriptionStopped', {
-            callSid,
-            transcriptionSid,
-            timestamp
-          })
-
-          // Emit to specific call room
-          global.io.to(`call_${callSid}`).emit('transcriptionStopped', {
+          // Only emit to transcription room, not broadcast
+          global.io.to(`transcription_${callSid}`).emit('transcriptionStopped', {
             callSid,
             transcriptionSid,
             timestamp
@@ -166,18 +148,9 @@ export async function POST(request: NextRequest) {
           errorCode: transcriptionErrorCode
         })
 
-        // Broadcast error to connected clients
         if (global.io) {
-          global.io.emit('transcriptionError', {
-            callSid,
-            transcriptionSid,
-            TranscriptionError: transcriptionError,
-            TranscriptionErrorCode: transcriptionErrorCode,
-            timestamp
-          })
-
-          // Emit to specific call room
-          global.io.to(`call_${callSid}`).emit('transcriptionError', {
+          // Only emit to transcription room, not broadcast
+          global.io.to(`transcription_${callSid}`).emit('transcriptionError', {
             callSid,
             transcriptionSid,
             TranscriptionError: transcriptionError,

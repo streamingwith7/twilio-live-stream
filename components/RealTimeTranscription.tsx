@@ -59,6 +59,12 @@ export default function RealTimeTranscription({
       }
     })
 
+    newSocket.on('transcriptionStarted', (data) => {
+      console.log('🎙️ Transcription started:', data)
+      setIsTranscribing(true)
+      setError(null)
+    })
+    
     newSocket.on('transcriptionContent', (data) => {
       console.log('📝 Transcription content:', data)
       

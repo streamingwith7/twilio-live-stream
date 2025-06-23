@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Socket } from 'socket.io-client'
+import { useState, useEffect } from 'react'
+import { io, Socket } from 'socket.io-client'
 
 interface CoachingTip {
   id: string;
@@ -14,47 +14,102 @@ interface CoachingTip {
 }
 
 interface RealTimeCoachingProps {
-  socket: Socket | null;
+  callSid?: string;
   isCallActive: boolean;
+  onError?: (error: string) => void;
 }
 
-export default function RealTimeCoaching({ socket, isCallActive }: RealTimeCoachingProps) {
+export default function RealTimeCoaching({ 
+  callSid, 
+  isCallActive, 
+  onError 
+}: RealTimeCoachingProps) {
   const [tips, setTips] = useState<CoachingTip[]>([]);
   const [isMinimized, setIsMinimized] = useState(false);
   const [currentTip, setCurrentTip] = useState<CoachingTip | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
+  // Initialize socket connection
   useEffect(() => {
-    if (!socket) return;
+    const token = localStorage.getItem('token')
+    if (!token || !isCallActive) return
+    console.log('🤖 Initializing coaching socket for callSid:', callSid);
+    
+    const newSocket = io({
+      auth: { token },
+      transports: ['polling', 'websocket'],
+      upgrade: true,
+      timeout: 20000,
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5
+    })
 
-    const handleCoachingTip = (tip: CoachingTip) => {
-      console.log('🤖 Received coaching tip:', tip);
-      setCurrentTip(tip);
+    newSocket.on('connect', () => {
+      if (callSid) {
+        console.log('🤖 Connected to coaching socket', callSid)
+        newSocket.emit('joinCoachingRoom', callSid)
+      }
+    })
+
+    newSocket.on('coachingRoomJoined', (data) => {
+      console.log('🤖 Joined coaching room:', data)
+    })
+
+    newSocket.on('coachingRoomError', (data) => {
+      console.error('🤖 Coaching room error:', data)
+      setError(data.error || 'Failed to join coaching room')
+      onError?.(data.error || 'Failed to join coaching room')
+    })
+
+    newSocket.on('coachingTip', (tip: CoachingTip) => {
+      console.log('🤖 Received coaching tip:', tip)
+      setCurrentTip(tip)
       setTips(prevTips => {
-        const newTips = [tip, ...prevTips].slice(0, 3);
-        return newTips;
-      });
+        const newTips = [tip, ...prevTips].slice(0, 3)
+        return newTips
+      })
+      
+      // Auto-dismiss current tip after 45 seconds
       setTimeout(() => {
-        setCurrentTip(prevCurrent => prevCurrent?.id === tip.id ? null : prevCurrent);
-      }, 45000);
+        setCurrentTip(prevCurrent => prevCurrent?.id === tip.id ? null : prevCurrent)
+      }, 45000)
+      
+      // Remove tip from list after 2 minutes
       setTimeout(() => {
-        setTips(prevTips => prevTips.filter(t => t.id !== tip.id));
-      }, 120000);
-    };
+        setTips(prevTips => prevTips.filter(t => t.id !== tip.id))
+      }, 120000)
+    })
 
-    socket.on('coachingTip', handleCoachingTip);
+    newSocket.on('disconnect', () => {
+      console.log('🤖 Disconnected from coaching socket')
+    })
+
+    newSocket.on('connect_error', (error) => {
+      console.error('💥 Coaching socket connection error:', error)
+      setError('Failed to connect to coaching service')
+      onError?.('Failed to connect to coaching service')
+    })
+
+    setSocket(newSocket)
 
     return () => {
-      socket.off('coachingTip', handleCoachingTip);
-    };
-  }, [socket]);
+      if (callSid) {
+        newSocket.emit('leaveCoachingRoom', callSid)
+      }
+      newSocket.disconnect()
+    }
+  }, [callSid, isCallActive])
 
   // Clear tips when call ends
   useEffect(() => {
     if (!isCallActive) {
-      setTips([]);
-      setCurrentTip(null);
+      setTips([])
+      setCurrentTip(null)
+      setError(null)
     }
-  }, [isCallActive]);
+  }, [isCallActive])
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -199,70 +254,52 @@ export default function RealTimeCoaching({ socket, isCallActive }: RealTimeCoach
             </button>
           </div>
 
+          {error && (
+            <div className="p-3 bg-red-50 border-b border-red-200 text-red-600 text-sm">
+              {error}
+            </div>
+          )}
+
           {!isMinimized && (
-            <div className="max-h-80 overflow-y-auto">
-              {tips.length === 0 ? (
-                <div className="p-4 text-center text-gray-500 text-sm">
-                  {isCallActive ? 'Listening for conversation...' : 'Start a call to receive coaching tips'}
-                </div>
-              ) : (
-                <div className="space-y-2 p-3">
-                  <div className="text-xs text-gray-500 font-medium mb-2">Recent Tips:</div>
+            <div className="p-3">
+              <div className="text-sm text-gray-600 mb-3">
+                {isCallActive ? 'Listening for conversation...' : 'Start a call to receive coaching tips'}
+              </div>
+
+              {tips.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-xs font-medium text-gray-700 uppercase tracking-wide">
+                    Recent Tips ({tips.length})
+                  </h4>
                   {tips.map((tip, index) => (
-                    <div
-                      key={tip.id}
-                      className={`p-3 rounded-lg border transition-all duration-300 ${getTypeColor(tip.type)} ${
-                        tip.id === currentTip?.id ? 'ring-2 ring-blue-400' : ''
-                      } ${index > 0 ? 'opacity-75' : ''}`}
-                    >
-                      <div className="flex items-start space-x-2">
-                        <span className="text-sm">{getTypeIcon(tip.type)}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium">
-                              {getTypeLabel(tip.type)}
-                            </span>
-                            <span className="text-xs opacity-50">
-                              {new Date(tip.timestamp).toLocaleTimeString()}
-                            </span>
-                          </div>
-                          <p className="text-sm font-medium leading-relaxed">
-                            {tip.message}
-                          </p>
-                          {tip.id === currentTip?.id && (
-                            <button
-                              onClick={() => setCurrentTip(tip)}
-                              className="text-xs underline mt-1 hover:no-underline"
-                            >
-                              View Full
-                            </button>
-                          )}
-                        </div>
+                    <div key={tip.id} className={`${getTypeColor(tip.type)} rounded-lg p-2 text-xs`}>
+                      <div className="flex items-start justify-between mb-1">
+                        <span className="font-medium">{getTypeLabel(tip.type)}</span>
+                        <span className={`px-1 py-0.5 rounded text-xs font-bold ${getPriorityBadge(tip.priority)}`}>
+                          {tip.priority}
+                        </span>
+                      </div>
+                      <p className="text-xs leading-relaxed">{tip.message}</p>
+                      <div className="text-xs opacity-75 mt-1">
+                        {new Date(tip.timestamp).toLocaleTimeString()}
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {tips.length === 0 && isCallActive && (
+                <div className="text-center py-4">
+                  <div className="text-2xl mb-2">🤖</div>
+                  <p className="text-xs text-gray-500">
+                    Waiting for conversation to provide coaching tips...
+                  </p>
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translate(-50%, -60%);
-          }
-          to {
-            opacity: 1;
-            transform: translate(-50%, -50%);
-          }
-        }
-        .animate-slide-in {
-          animation: slideIn 0.5s ease-out;
-        }
-      `}</style>
     </>
-  );
+  )
 } 

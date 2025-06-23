@@ -439,8 +439,9 @@ export default function MakeCallPage() {
       </main>
 
       <RealTimeCoaching 
-        socket={socket}
+        callSid={activeCallSid || voiceClient.activeCall?.callSid}
         isCallActive={isCallActive || isVoiceCallActive}
+        onError={handleError}
       />
 
       {incomingCall && (
