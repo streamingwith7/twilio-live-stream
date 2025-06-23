@@ -19,6 +19,7 @@ export function useVoiceClient({
   const [callStatus, setCallStatus] = useState<string>('idle')
   const [isMuted, setIsMuted] = useState(false)
   const [volume, setVolume] = useState(0.8)
+  const [isLoadingToken, setIsLoadingToken] = useState(false)
   
   const deviceRef = useRef<any | null>(null)
   const tokenRefreshInterval = useRef<NodeJS.Timeout | null>(null)
@@ -193,6 +194,7 @@ export function useVoiceClient({
 
   const getAccessToken = async (): Promise<{token: string, identity: string} | null> => {
     try {
+      setIsLoadingToken(true)
       const token = localStorage.getItem('token')
       
       // Use a consistent identity based on user ID for easier TwiML dialing
@@ -221,6 +223,8 @@ export function useVoiceClient({
     } catch (error) {
       console.error('Token fetch error:', error)
       return null
+    } finally {
+      setIsLoadingToken(false)
     }
   }
 
@@ -379,6 +383,7 @@ export function useVoiceClient({
     callStatus,
     isMuted,
     volume,
+    isLoadingToken,
     makeCall,
     answerCall,
     rejectCall,

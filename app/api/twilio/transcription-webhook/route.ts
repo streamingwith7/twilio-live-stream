@@ -1,6 +1,6 @@
-
 import { NextRequest, NextResponse } from 'next/server'
 import { coachingService } from '@/lib/coaching-service'
+import { callStrategyService } from '@/lib/call-strategy-service'
 
 const callStateTracker = new Map<string, {
   customerData?: any;
@@ -11,7 +11,6 @@ const callStateTracker = new Map<string, {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.formData()
-    
     const accountSid = body.get('AccountSid') as string
     const callSid = body.get('CallSid') as string
     const transcriptionSid = body.get('TranscriptionSid') as string
@@ -22,8 +21,7 @@ export async function POST(request: NextRequest) {
     switch (transcriptionEvent) {
       case 'transcription-started':
         console.log('🎙️ Enhanced transcription started for call:', callSid)
-        
-        // Initialize call tracking
+        console.log('body', body);
         callStateTracker.set(callSid, {
           callStartTime: Date.now(),
           stage: 'started'
@@ -37,7 +35,6 @@ export async function POST(request: NextRequest) {
             enhanced: true
           });
 
-          // Emit initial coaching status
           global.io.to(`coaching_${callSid}`).emit('coachingStatus', {
             callSid,
             status: 'active',
@@ -53,7 +50,6 @@ export async function POST(request: NextRequest) {
         const transcriptionData = body.get('TranscriptionData') as string
         const final = body.get('Final') as string
         const stability = body.get('Stability') as string
-
         if (global.io) {
           const transcriptEvent = {
             CallSid: callSid,
@@ -71,18 +67,52 @@ export async function POST(request: NextRequest) {
           global.io.to(`transcription_${callSid}`).emit('transcriptionContent', transcriptEvent)
 
           if (final === 'true' && transcriptionData && transcriptionData.trim().length > 0) {
-            console.log(`🤖 Processing enhanced coaching for call ${callSid}`);
+            console.log(`🤖 Processing enhanced coaching for call ${callSid}`, transcriptionData);
+            console.log('callData', {
+              transcriptionData,
+              track
+            });
             
             const enhancedTip = await coachingService.processTranscript(
               callSid, 
               track, 
-              transcriptionData, 
+              transcriptionData,
               timestamp
             );
+
 
             if (enhancedTip) {
               global.io.to(`coaching_${callSid}`).emit('enhancedCoachingTip', enhancedTip);
               console.log(`🤖 Enhanced coaching tip for call ${callSid}:`, enhancedTip.message);
+            }
+
+            console.log(`🎯 Processing call strategy for call ${callSid}`);
+            const conversation = coachingService.getCallAnalytics(callSid);
+            const speaker = track === 'inbound_track' ? 'agent' : 'customer';
+            
+            const strategyResult = await callStrategyService.processTranscript(
+              callSid,
+              transcriptionData,
+              speaker,
+              conversation
+            );
+
+            if (strategyResult.requirements.length > 0) {
+              global.io.to(`strategy_${callSid}`).emit('newClientRequirements', {
+                callSid,
+                requirements: strategyResult.requirements,
+                timestamp: new Date().toISOString()
+              });
+              console.log(`🎯 New client requirements for call ${callSid}:`, strategyResult.requirements.length);
+            }
+
+            if (strategyResult.strategy) {
+              global.io.to(`strategy_${callSid}`).emit('callStrategyUpdate', {
+                callSid,
+                strategy: strategyResult.strategy,
+                timestamp: new Date().toISOString()
+              });
+              console.log(`🎯 Call strategy updated for call ${callSid}, version ${strategyResult.strategy.version}`);
             }
 
             // Emit updated analytics
@@ -138,6 +168,7 @@ export async function POST(request: NextRequest) {
 
         // Clean up
         coachingService.endCall(callSid);
+        callStrategyService.endCall(callSid);
         callStateTracker.delete(callSid);
         break
 

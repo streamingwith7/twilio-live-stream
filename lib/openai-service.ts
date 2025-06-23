@@ -84,16 +84,13 @@ PERFORMANCE INDICATORS:
 CRITICAL: Respond with ONLY valid JSON. No markdown, no code blocks, no additional text.`
   };
 
-  // Robust JSON parsing helper
   private parseJsonResponse(content: string): any {
     if (!content) {
       throw new Error('Empty response from OpenAI');
     }
 
-    // Remove markdown code blocks if present
     let cleanContent = content.trim();
     
-    // Remove ```json and ``` if present
     if (cleanContent.startsWith('```json')) {
       cleanContent = cleanContent.replace(/^```json\s*/, '');
     }
@@ -104,7 +101,6 @@ CRITICAL: Respond with ONLY valid JSON. No markdown, no code blocks, no addition
       cleanContent = cleanContent.replace(/\s*```$/, '');
     }
 
-    // Remove any leading/trailing whitespace
     cleanContent = cleanContent.trim();
     console.log('cleanContent', cleanContent);
     try {
@@ -345,6 +341,25 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
       return response.choices[0]?.message?.content || '';
     } catch (error) {
       console.error('Error in chat completion:', error);
+      throw error;
+    }
+  }
+
+  async chatWithFunctions(messages: any[], functions: any[], options: any = {}): Promise<any> {
+    try {
+      const response = await openai.chat.completions.create({
+        model: options.model || "gpt-4o",
+        messages,
+        functions,
+        function_call: options.function_call || "auto",
+        temperature: options.temperature || 0.7,
+        max_tokens: options.max_tokens || 500,
+        ...options
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error in function calling chat completion:', error);
       throw error;
     }
   }

@@ -176,6 +176,41 @@ app.prepare().then(() => {
       });
     });
 
+    // Strategy room handlers
+    socket.on('joinStrategyRoom', (callSid) => {
+      if (!callSid) {
+        socket.emit('strategyRoomError', { error: 'CallSid is required' });
+        return;
+      }
+      
+      const strategyRoom = `strategy_${callSid}`;
+      socket.join(strategyRoom);
+      console.log(`🎯 Socket ${socket.id} joined strategy room for call ${callSid}`);
+      
+      socket.emit('strategyRoomJoined', { 
+        callSid, 
+        room: strategyRoom,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    socket.on('leaveStrategyRoom', (callSid) => {
+      if (!callSid) {
+        socket.emit('strategyRoomError', { error: 'CallSid is required' });
+        return;
+      }
+      
+      const strategyRoom = `strategy_${callSid}`;
+      socket.leave(strategyRoom);
+      console.log(`🎯 Socket ${socket.id} left strategy room for call ${callSid}`);
+      
+      socket.emit('strategyRoomLeft', { 
+        callSid, 
+        room: strategyRoom,
+        timestamp: new Date().toISOString()
+      });
+    });
+
     // Request transcription status for a specific call
     socket.on('requestTranscriptionStatus', (callSid) => {
       if (!callSid) {

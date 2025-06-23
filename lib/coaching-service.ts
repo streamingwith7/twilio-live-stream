@@ -285,7 +285,6 @@ class EnhancedCoachingService {
         actualTranscript = transcriptionData;
       }
 
-      // Add transcript to tracker
       this.tracker.addTranscript(callSid, speaker, actualTranscript, timestamp);
       
       const conversation = this.tracker.getConversation(callSid);
@@ -294,7 +293,6 @@ class EnhancedCoachingService {
         return null;
       }
 
-      // Check if we should generate a tip
       const now = Date.now();
       const timeSinceLastTip = now - conversation.lastTipTime;
       const minTimeBetweenTips = this.calculateMinTimeBetweenTips(conversation.analytics);
@@ -303,7 +301,6 @@ class EnhancedCoachingService {
         return null;
       }
 
-      // Generate enhanced coaching tip
       const tip = await this.generateEnhancedTip(callSid, conversation);
       
       if (tip && tip.relevanceScore >= 70) {
@@ -321,12 +318,11 @@ class EnhancedCoachingService {
   }
 
   private calculateMinTimeBetweenTips(analytics: CallAnalytics): number {
-    // Dynamic timing based on conversation stage and customer sentiment
     const baseTime = 8000; // 8 seconds
     
-    if (analytics.conversationStage === 'closing') return baseTime * 0.5; // More frequent during closing
-    if (analytics.customerSentiment === 'negative') return baseTime * 0.7; // More frequent when customer is negative
-    if (analytics.conversationStage === 'opening') return baseTime * 1.5; // Less frequent during opening
+    if (analytics.conversationStage === 'closing') return baseTime * 0.5;
+    if (analytics.customerSentiment === 'negative') return baseTime * 0.7;
+    if (analytics.conversationStage === 'opening') return baseTime * 1.5;
     
     return baseTime;
   }
@@ -336,9 +332,9 @@ class EnhancedCoachingService {
     conversation: any
   ): Promise<EnhancedCoachingTip | null> {
     const { turns, analytics } = conversation;
-    const recentTurns = turns.slice(-6); // Last 6 turns for context
+    console.log('conversation', conversation);
+    const recentTurns = turns.slice(-6);
     
-    // Create enhanced prompt with full context
     const prompt = `
 You are an AI sales coach providing real-time guidance. Analyze this conversation and provide ONE specific, actionable tip.
 

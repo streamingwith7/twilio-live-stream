@@ -36,18 +36,14 @@ export default function TranscriptionRoomExample({
       reconnectionAttempts: 5
     })
 
-    // Basic connection events
     newSocket.on('connect', () => {
       console.log('🎙️ Connected to transcription socket')
       setIsConnected(true)
       
-      // Join the transcription room for this specific call
       newSocket.emit('joinTranscriptionRoom', callSid)
       
-      // Request current transcription status
       newSocket.emit('requestTranscriptionStatus', callSid)
       
-      // Get list of all active transcriptions
       newSocket.emit('getActiveTranscriptions')
     })
 
@@ -56,7 +52,6 @@ export default function TranscriptionRoomExample({
       setIsConnected(false)
     })
 
-    // Transcription room specific events
     newSocket.on('transcriptionRoomJoined', (data) => {
       console.log('✅ Joined transcription room:', data)
     })
@@ -69,7 +64,6 @@ export default function TranscriptionRoomExample({
       console.error('❌ Transcription room error:', data.error)
     })
 
-    // Transcription status events
     newSocket.on('transcriptionStatus', (data) => {
       console.log('📊 Transcription status:', data)
       setTranscriptionStatus(data.status)
@@ -79,7 +73,6 @@ export default function TranscriptionRoomExample({
       console.error('❌ Transcription status error:', data.error)
     })
 
-    // Transcription events
     newSocket.on('transcriptionReady', (data) => {
       if (data.callSid === callSid) {
         console.log('🎙️ Transcription ready:', data)
@@ -111,13 +104,11 @@ export default function TranscriptionRoomExample({
       }
     })
 
-    // Global transcription events
     newSocket.on('activeTranscriptions', (data) => {
       console.log('📋 Active transcriptions:', data)
       setActiveTranscriptions(data.transcriptions)
     })
 
-    // Heartbeat for connection monitoring
     const heartbeatInterval = setInterval(() => {
       if (newSocket.connected) {
         newSocket.emit('heartbeat', { timestamp: Date.now() })
@@ -155,7 +146,6 @@ export default function TranscriptionRoomExample({
     <div className="p-6 bg-white rounded-lg shadow-md">
       <h3 className="text-lg font-semibold mb-4">Transcription Room Example</h3>
       
-      {/* Connection Status */}
       <div className="mb-4">
         <div className="flex items-center space-x-2">
           <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>

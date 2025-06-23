@@ -11,6 +11,7 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 import IncomingCallModal from '@/components/IncomingCallModal'
 import RealTimeTranscription from '@/components/RealTimeTranscription'
 import RealTimeCoaching from '@/components/RealTimeCoaching'
+import CallStrategyWidget from '@/components/CallStrategyWidget'
 import { useVoiceClient } from '@/hooks/useVoiceClient'
 
 interface ActiveCall {
@@ -112,7 +113,6 @@ export default function MakeCallPage() {
       console.log('Disconnected from calling server')
     })
 
-    // Listen for call events
     newSocket.on('callInitiated', (data: ActiveCall) => {
       console.log('Call initiated:', data)
       setActiveCalls(prev => [...prev, data])
@@ -132,7 +132,6 @@ export default function MakeCallPage() {
         )
       )
 
-      // Remove completed calls after a delay and update call state
       if (['completed', 'failed', 'busy', 'no-answer'].includes(data.status)) {
         if (data.callSid === activeCallSid) {
           setIsCallActive(false)
@@ -231,7 +230,6 @@ export default function MakeCallPage() {
       setSuccess(`Browser call initiated to ${callData.to}`)
       setTimeout(() => setSuccess(null), 3000)
     }
-    // The socket event will handle adding server-side calls to active calls
   }
 
   const handleError = (errorMessage: string) => {
@@ -278,7 +276,7 @@ export default function MakeCallPage() {
   }
 
   if (loading) {
-    return <LoadingSpinner fullScreen />
+    return <LoadingSpinner fullScreen message="Loading application..." />
   }
 
   const isVoiceCallActive = voiceClient.activeCall && 
@@ -327,8 +325,12 @@ export default function MakeCallPage() {
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Column - Dialer */}
             <div>
+              {voiceClient.isLoadingToken && (
+                <div className="mb-4 flex items-center justify-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <LoadingSpinner size="sm" message="Initializing voice calling..." />
+                </div>
+              )}
               <Dialer 
                 phoneNumbers={phoneNumbers}
                 onCallInitiated={handleCallInitiated}
@@ -338,76 +340,15 @@ export default function MakeCallPage() {
                 callStatus={voiceClient.callStatus}
               />
             </div>
-
-            {/* Right Column - Active Call Controls or Server-side Calls */}
-            <div className="space-y-6">
-              {activeCalls.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    {isVoiceCallActive ? 'Server-side Calls' : 'Active Calls'}
-                  </h3>
-                  <div className="space-y-3">
-                    {activeCalls.map((call) => (
-                      <div key={call.callSid} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="flex items-center">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(call.status)}`}>
-                                {call.status}
-                              </span>
-                              <span className="ml-2 text-sm text-gray-600">
-                                {call.direction === 'outbound' ? 'To' : 'From'}: {call.direction === 'outbound' ? call.to : call.from}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              Call SID: {call.callSid}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm text-gray-900">{call.direction === 'outbound' ? call.from : call.to}</div>
-                            <div className="text-xs text-gray-500">
-                              {new Date(call.timestamp).toLocaleTimeString()}
-                            </div>
-                          </div>
-                        </div>
-                        
-                                                 {/* Live Stream Player for active calls */}
-                         {(call.status === 'in-progress' || call.status === 'ringing') && (
-                           <div className="mt-4">
-                             <LiveStreamPlayer
-                               callSid={call.callSid}
-                               phoneNumber={call.direction === 'outbound' ? call.to : call.from}
-                               onStreamEnd={() => handleStreamEnd(call.callSid)}
-                             />
-                        </div>
-                         )}
-                      </div>
-                    ))}
-                  </div>
-                  </div>
-                )}
-
-              {/* Help Text */}
-              {!isVoiceCallActive && activeCalls.length === 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="text-center">
-                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                    </svg>
-                    <h3 className="mt-2 text-sm font-medium text-gray-900">Ready to make calls</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                      {voiceClient.isReady 
-                        ? 'Enter a phone number and click Call to start a browser call with audio.'
-                        : 'Enter a phone number on the left to start making calls.'
-                      }
-                    </p>
-                  </div>
-                </div>
-              )}
+            <div>
+              <CallStrategyWidget 
+                callSid={activeCallSid || voiceClient.activeCall?.callSid}
+                isCallActive={isCallActive || isVoiceCallActive}
+                onError={handleError}
+              />
             </div>
           </div>
 
-          {/* Real-Time Transcription Widget - Separated and Less Prominent */}
           {(isCallActive || isVoiceCallActive) && (
             <div className="mt-8">
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1">

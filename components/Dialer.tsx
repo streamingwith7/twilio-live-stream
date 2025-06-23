@@ -243,7 +243,7 @@ export default function Dialer({
               value={phoneNumber}
               onChange={(e) => handleDirectInput(e.target.value)}
               placeholder="Enter phone number"
-              className="w-full px-3 py-3 text-xl text-center border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-3 text-xl text-center border border-gray-300 rounded-lg focus:border-blue-500"
               disabled={isCallActive}
             />
           </div>
