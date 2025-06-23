@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
       allParams: Object.fromEntries(body.entries())
     })
 
+
     // Determine if this is an incoming call (to Twilio number) or outbound call (from browser client)
     const isOutboundBrowserCall = from && from.startsWith('client:')
     const isIncomingCall = !isOutboundBrowserCall
@@ -49,6 +50,17 @@ export async function POST(request: NextRequest) {
         const languageCode = 'en-US';
         const track = 'both_tracks';
         console.log('tracking working');
+        if (global.io) {
+        global.io.emit('callInitiated', {
+          from,
+          to,
+          callSid,
+          callStatus,
+          callerId: body.get('CallerId'),
+            timestamp: new Date().toISOString(),
+            allParams: Object.fromEntries(body.entries())
+          })
+        };
         twiml = `
         <Response>
           <Start>

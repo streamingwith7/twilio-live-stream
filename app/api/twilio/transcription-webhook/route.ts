@@ -8,10 +8,8 @@ const conversationTracker = new Map<string, {
   lastTipTime: number;
 }>();
 
-// AI Coaching analysis function
 async function handleCoachingAnalysis(callSid: string, track: string, transcriptionData: string, timestamp: string) {
   try {
-    // Get or create conversation state
     let conversation = conversationTracker.get(callSid);
     if (!conversation) {
       conversation = {
@@ -22,25 +20,19 @@ async function handleCoachingAnalysis(callSid: string, track: string, transcript
       conversationTracker.set(callSid, conversation);
     }
 
-    // Determine if this is from agent or customer
-    // Track "inbound_track" is typically the agent, "outbound_track" is typically the customer
-    // But this can vary based on Twilio configuration
     const isAgent = track === 'inbound_track';
     const isCustomer = track === 'outbound_track';
 
-    // Parse the transcription data (it comes as JSON)
     let actualTranscript = transcriptionData;
     try {
       const parsed = JSON.parse(transcriptionData);
       actualTranscript = parsed.transcript || transcriptionData;
     } catch (e) {
-      // If not JSON, use as-is
       actualTranscript = transcriptionData;
     }
 
     console.log(`🎤 Track: ${track}, isAgent: ${isAgent}, isCustomer: ${isCustomer}, transcript: "${actualTranscript}"`);
 
-    // Update conversation state
     if (isAgent) {
       conversation.lastAgentText = actualTranscript;
     } else if (isCustomer) {
@@ -68,7 +60,6 @@ async function handleCoachingAnalysis(callSid: string, track: string, transcript
           callSid
         });
 
-        // Also emit to specific call room
         global.io.to(`call_${callSid}`).emit('coachingTip', {
           ...tip,
           callSid
@@ -121,14 +112,6 @@ export async function POST(request: NextRequest) {
         const final = body.get('Final') as string
         const stability = body.get('Stability') as string
 
-        // console.log('📝 Transcription content:', {
-        //   callSid,
-        //   transcriptionData,
-        //   final,
-        //   track,
-        //   languageCode
-        // })
-
         if (global.io) {
           const transcriptEvent = {
             CallSid: callSid,
@@ -142,7 +125,7 @@ export async function POST(request: NextRequest) {
             SequenceId: sequenceId
           }
 
-          global.io.emit('transcriptionContent', transcriptEvent)
+          // global.io.emit('transcriptionContent', transcriptEvent)
 
           // Emit to specific call room
           global.io.to(`call_${callSid}`).emit('transcriptionContent', transcriptEvent)

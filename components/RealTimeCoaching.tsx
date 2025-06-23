@@ -28,22 +28,14 @@ export default function RealTimeCoaching({ socket, isCallActive }: RealTimeCoach
 
     const handleCoachingTip = (tip: CoachingTip) => {
       console.log('🤖 Received coaching tip:', tip);
-      
-      // Set as current tip for prominent display
       setCurrentTip(tip);
-      
-      // Add to history and keep only last 3 tips
       setTips(prevTips => {
         const newTips = [tip, ...prevTips].slice(0, 3);
         return newTips;
       });
-
-      // Auto-remove current tip after 45 seconds
       setTimeout(() => {
         setCurrentTip(prevCurrent => prevCurrent?.id === tip.id ? null : prevCurrent);
       }, 45000);
-
-      // Remove from history after 2 minutes
       setTimeout(() => {
         setTips(prevTips => prevTips.filter(t => t.id !== tip.id));
       }, 120000);

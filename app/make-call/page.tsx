@@ -438,13 +438,11 @@ export default function MakeCallPage() {
         </div>
       </main>
 
-      {/* Real-Time AI Coaching Tips */}
       <RealTimeCoaching 
         socket={socket}
         isCallActive={isCallActive || isVoiceCallActive}
       />
 
-      {/* Incoming Call Modal */}
       {incomingCall && (
         <IncomingCallModal
           isOpen={true}

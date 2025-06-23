@@ -33,19 +33,6 @@ export async function POST(request: NextRequest) {
     const client = twilio(accountSid, authToken)
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://closemydeals.com'
 
-    console.log('call-status', {
-      from: fromNumber,
-      to: toNumber,
-      url: `${baseUrl}/api/twilio/outbound-webhook`,
-      method: 'POST',
-      statusCallback: `${baseUrl}/api/twilio/webhook`,
-      statusCallbackMethod: 'POST',
-      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed', 'busy', 'failed', 'no-answer'],
-      record: true,
-      recordingStatusCallback: `${baseUrl}/api/twilio/recording-status`,
-      recordingStatusCallbackMethod: 'POST'
-    });
-
     const call = await client.calls.create({
       from: fromNumber,
       to: toNumber,
@@ -60,6 +47,15 @@ export async function POST(request: NextRequest) {
     })
 
     if (global.io) {
+      console.log('callInitiated', {
+        callSid: call.sid,
+        from: fromNumber,
+        to: toNumber,
+        status: call.status,
+        direction: 'outbound',
+        userId: userId,
+        timestamp: new Date().toISOString()
+      });
       global.io.emit('callInitiated', {
         callSid: call.sid,
         from: fromNumber,
