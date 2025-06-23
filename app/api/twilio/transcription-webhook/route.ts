@@ -1,75 +1,12 @@
+
 import { NextRequest, NextResponse } from 'next/server'
-import { openaiService } from '@/lib/openai-service'
+import { coachingService } from '@/lib/coaching-service'
 
-// Track conversation state for AI coaching
-const conversationTracker = new Map<string, {
-  lastAgentText: string;
-  lastCustomerText: string;
-  lastTipTime: number;
+const callStateTracker = new Map<string, {
+  customerData?: any;
+  callStartTime: number;
+  stage: string;
 }>();
-
-async function handleCoachingAnalysis(callSid: string, track: string, transcriptionData: string, timestamp: string) {
-  try {
-    let conversation = conversationTracker.get(callSid);
-    if (!conversation) {
-      conversation = {
-        lastAgentText: '',
-        lastCustomerText: '',
-        lastTipTime: 0
-      };
-      conversationTracker.set(callSid, conversation);
-    }
-
-    const isAgent = track === 'inbound_track';
-    const isCustomer = track === 'outbound_track';
-
-    let actualTranscript = transcriptionData;
-    try {
-      const parsed = JSON.parse(transcriptionData);
-      actualTranscript = parsed.transcript || transcriptionData;
-    } catch (e) {
-      actualTranscript = transcriptionData;
-    }
-
-    console.log(`🎤 Track: ${track}, isAgent: ${isAgent}, isCustomer: ${isCustomer}, transcript: "${actualTranscript}"`);
-
-    if (isAgent) {
-      conversation.lastAgentText = actualTranscript;
-    } else if (isCustomer) {
-      conversation.lastCustomerText = actualTranscript;
-    }
-
-    const now = Date.now();
-    const timeSinceLastTip = now - conversation.lastTipTime;
-    const minTimeBetweenTips = 10000; // 10 seconds
-    console.log('conversation', conversation);
-    if (conversation.lastAgentText && conversation.lastCustomerText && 
-        timeSinceLastTip >= minTimeBetweenTips) {
-      
-      const tip = await openaiService.generateCoachingTip({
-        agentText: conversation.lastAgentText,
-        customerText: conversation.lastCustomerText,
-        conversationHistory: [],
-        callSid,
-        timestamp
-      });
-
-      if (tip && global.io) {
-        // Only emit to coaching room, not broadcast to all clients
-        global.io.to(`coaching_${callSid}`).emit('coachingTip', {
-          ...tip,
-          callSid
-        });
-
-        console.log(`🤖 AI Coaching tip for call ${callSid}:`, tip.message);
-        conversation.lastTipTime = now;
-      }
-    }
-
-  } catch (error) {
-    console.error('Error in AI coaching analysis:', error);
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -84,15 +21,29 @@ export async function POST(request: NextRequest) {
 
     switch (transcriptionEvent) {
       case 'transcription-started':
-        console.log('🎙️ Transcription started for call:', callSid)
+        console.log('🎙️ Enhanced transcription started for call:', callSid)
         
+        // Initialize call tracking
+        callStateTracker.set(callSid, {
+          callStartTime: Date.now(),
+          stage: 'started'
+        });
+
         if (global.io) {
-          // Only emit to transcription room, not broadcast
           global.io.to(`transcription_${callSid}`).emit('transcriptionStarted', {
             callSid,
             transcriptionSid,
+            timestamp,
+            enhanced: true
+          });
+
+          // Emit initial coaching status
+          global.io.to(`coaching_${callSid}`).emit('coachingStatus', {
+            callSid,
+            status: 'active',
+            analytics: coachingService.getCallAnalytics(callSid),
             timestamp
-          })
+          });
         }
         break
 
@@ -113,58 +64,115 @@ export async function POST(request: NextRequest) {
             Timestamp: timestamp,
             LanguageCode: languageCode,
             Stability: stability,
-            SequenceId: sequenceId
+            SequenceId: sequenceId,
+            Enhanced: true
           }
-
-          // global.io.emit('transcriptionContent', transcriptEvent)
 
           global.io.to(`transcription_${callSid}`).emit('transcriptionContent', transcriptEvent)
 
           if (final === 'true' && transcriptionData && transcriptionData.trim().length > 0) {
-            await handleCoachingAnalysis(callSid, track, transcriptionData, timestamp);
+            console.log(`🤖 Processing enhanced coaching for call ${callSid}`);
+            
+            const enhancedTip = await coachingService.processTranscript(
+              callSid, 
+              track, 
+              transcriptionData, 
+              timestamp
+            );
+
+            if (enhancedTip) {
+              global.io.to(`coaching_${callSid}`).emit('enhancedCoachingTip', enhancedTip);
+              console.log(`🤖 Enhanced coaching tip for call ${callSid}:`, enhancedTip.message);
+            }
+
+            // Emit updated analytics
+            const analytics = coachingService.getCallAnalytics(callSid);
+            if (analytics) {
+              global.io.to(`coaching_${callSid}`).emit('analyticsUpdate', {
+                callSid,
+                analytics,
+                timestamp: new Date().toISOString()
+              });
+            }
+
+            // Emit conversation insights periodically
+            const callState = callStateTracker.get(callSid);
+            const callDuration = callState ? Date.now() - callState.callStartTime : 0;
+            
+            // Send insights every 2 minutes
+            if (callDuration > 0 && callDuration % 120000 < 5000) {
+              const summary = coachingService.generateCallSummary(callSid);
+              if (summary) {
+                global.io.to(`coaching_${callSid}`).emit('callInsights', {
+                  callSid,
+                  summary,
+                  timestamp: new Date().toISOString()
+                });
+              }
+            }
           }
         }
         break
 
       case 'transcription-stopped':
-        console.log('🛑 Transcription stopped for call:', callSid)
+        console.log('🛑 Enhanced transcription stopped for call:', callSid)
+        
+        // Generate final call summary
+        const finalSummary = coachingService.generateCallSummary(callSid);
         
         if (global.io) {
-          // Only emit to transcription room, not broadcast
           global.io.to(`transcription_${callSid}`).emit('transcriptionStopped', {
             callSid,
             transcriptionSid,
+            timestamp,
+            enhanced: true
+          });
+
+          // Emit final coaching summary
+          global.io.to(`coaching_${callSid}`).emit('finalCoachingSummary', {
+            callSid,
+            summary: finalSummary,
             timestamp
-          })
+          });
         }
+
+        // Clean up
+        coachingService.endCall(callSid);
+        callStateTracker.delete(callSid);
         break
 
       case 'transcription-error':
         const transcriptionError = body.get('TranscriptionError') as string
         const transcriptionErrorCode = body.get('TranscriptionErrorCode') as string
 
-        console.error('❌ Transcription error for call:', callSid, {
+        console.error('❌ Enhanced transcription error for call:', callSid, {
           error: transcriptionError,
           errorCode: transcriptionErrorCode
         })
 
         if (global.io) {
-          // Only emit to transcription room, not broadcast
           global.io.to(`transcription_${callSid}`).emit('transcriptionError', {
             callSid,
             transcriptionSid,
             TranscriptionError: transcriptionError,
             TranscriptionErrorCode: transcriptionErrorCode,
+            timestamp,
+            enhanced: true
+          });
+
+          // Emit coaching error
+          global.io.to(`coaching_${callSid}`).emit('coachingError', {
+            callSid,
+            error: 'Transcription service error - coaching temporarily unavailable',
             timestamp
-          })
+          });
         }
         break
 
       default:
-        console.log('Unknown transcription event:', transcriptionEvent)
+        console.log('Unknown enhanced transcription event:', transcriptionEvent)
     }
 
-    // Return TwiML response to acknowledge receipt
     return new NextResponse(
       '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
       {
@@ -176,7 +184,7 @@ export async function POST(request: NextRequest) {
     )
 
   } catch (error: any) {
-    console.error('Transcription webhook error:', error)
+    console.error('Enhanced transcription webhook error:', error)
     
     return new NextResponse(
       '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
@@ -188,4 +196,40 @@ export async function POST(request: NextRequest) {
       }
     )
   }
-} 
+}
+
+// Additional endpoint for manual coaching requests
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const callSid = searchParams.get('callSid');
+  const action = searchParams.get('action');
+
+  if (!callSid) {
+    return NextResponse.json({ error: 'CallSid required' }, { status: 400 });
+  }
+
+  try {
+    switch (action) {
+      case 'analytics':
+        const analytics = coachingService.getCallAnalytics(callSid);
+        return NextResponse.json({ callSid, analytics });
+
+      case 'summary':
+        const summary = coachingService.generateCallSummary(callSid);
+        return NextResponse.json({ callSid, summary });
+
+      case 'insights':
+        const insights = coachingService.generateCallSummary(callSid);
+        return NextResponse.json({ 
+          callSid, 
+          insights: insights?.keyInsights || [] 
+        });
+
+      default:
+        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    }
+  } catch (error) {
+    console.error('Error fetching coaching data:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

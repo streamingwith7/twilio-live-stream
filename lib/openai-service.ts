@@ -4,198 +4,350 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export interface CoachingTip {
-  id: string;
-  type: 'suggestion' | 'opportunity' | 'next_step' | 'response';
-  message: string;
-  priority: 'low' | 'medium' | 'high';
-  timestamp: string;
-  context?: string;
-}
-
-export interface ConversationContext {
+interface ConversationContext {
   agentText: string;
   customerText: string;
-  conversationHistory: string[];
+  conversationHistory?: any[];
   callSid: string;
   timestamp: string;
+  analytics?: any;
+  customerProfile?: any;
 }
 
-const SALES_COACHING_PROMPT = `You are an expert sales coach providing real-time guidance to sales representatives during customer calls. 
+class EnhancedOpenAIService {
+  private systemPrompts = {
+    salesCoach: `You are an expert AI sales coach with 20+ years of experience in high-performance sales training. Your role is to provide real-time, actionable coaching during live sales calls.
 
-Your role is to:
-1. Analyze the conversation in real-time
-2. Provide concise, positive actionable guidance (max 20 words)
-3. Help the agent close more deals and set appointments
-4. Focus on what TO SAY rather than what NOT to say
+CORE PRINCIPLES:
+- Be specific and immediately actionable
+- Focus on the next best action, not general advice
+- Consider the conversation stage and customer psychology
+- Provide responses that increase close probability
+- Address risk factors before they become objections
+- Capitalize on buying signals and opportunities
 
-Conversation context:
-- Agent is the sales person trying to close deals/set appointments
-- Customer is the prospect being contacted
-- Always provide positive, constructive guidance
-- Focus on next best actions and responses
-- Be encouraging and solution-focused
+RESPONSE GUIDELINES:
+- Tips should be 50-100 words maximum
+- Include specific language when helpful
+- Consider timing and customer state
+- Prioritize based on impact and urgency
+- Always include reasoning for your advice
 
-Types of tips to provide:
-- "suggestion": What to say or ask next to move the conversation forward
-- "opportunity": Specific chances to close, demo, or advance the sale
-- "next_step": Clear positive direction on how to proceed
-- "response": How to address customer concerns constructively
+CONVERSATION STAGES:
+- Opening: Build rapport, establish credibility
+- Discovery: Uncover needs, pain points, decision criteria
+- Presentation: Present solutions aligned to needs
+- Objection Handling: Address concerns, provide reassurance
+- Closing: Create urgency, ask for commitment
 
-Respond with a JSON object containing:
-{
-  "type": "suggestion|opportunity|next_step|response",
-  "message": "Positive, actionable guidance (max 20 words)",
-  "priority": "low|medium|high",
-  "context": "Brief explanation if needed"
-}
+CUSTOMER PSYCHOLOGY INDICATORS:
+- Positive: Engaged questions, "tell me more", agreement
+- Negative: Short responses, skepticism, price focus
+- Neutral: Fact-gathering, comparison shopping
 
-IMPORTANT: Always frame advice positively. Instead of "Don't say X", suggest "Try saying Y". Focus on constructive responses and next steps.
+CRITICAL: You must respond with ONLY valid JSON. Do not use markdown formatting, code blocks, or any other text. Only pure JSON.`,
 
-Only provide tips when there's a clear, actionable insight. Don't provide generic advice.`;
+    sentimentAnalyzer: `You are an expert in conversation sentiment analysis and customer psychology. Analyze the emotional state and intent behind customer communications.
 
-export class OpenAIService {
-  private conversationHistory: Map<string, string[]> = new Map();
+SENTIMENT CATEGORIES:
+- Positive: Interested, engaged, excited, ready to buy
+- Negative: Frustrated, skeptical, resistant, concerned
+- Neutral: Information-gathering, comparison, undecided
 
-  async generateCoachingTip(context: ConversationContext): Promise<CoachingTip | null> {
+INTENT CATEGORIES:
+- price_inquiry: Asking about cost, pricing, budget
+- information_seeking: Wanting details, features, benefits
+- objection: Expressing concerns or resistance
+- comparison: Evaluating against alternatives
+- closing_signals: Ready to move forward
+- stalling: Delaying decision, need to think
+
+CRITICAL: Respond with ONLY valid JSON. No markdown, no code blocks, no additional text.`,
+
+    performanceAnalyzer: `You are a sales performance analyst. Evaluate agent behavior and conversation flow to identify improvement opportunities.
+
+EVALUATION CRITERIA:
+- Question quality and discovery effectiveness
+- Listening and response alignment
+- Objection handling technique
+- Closing attempt timing and approach
+- Rapport building and relationship management
+- Product knowledge demonstration
+
+PERFORMANCE INDICATORS:
+- Talk ratio (optimal: 30-40% agent, 60-70% customer)
+- Question-to-statement ratio
+- Customer engagement level
+- Objection resolution success
+- Progress toward close
+
+CRITICAL: Respond with ONLY valid JSON. No markdown, no code blocks, no additional text.`
+  };
+
+  // Robust JSON parsing helper
+  private parseJsonResponse(content: string): any {
+    if (!content) {
+      throw new Error('Empty response from OpenAI');
+    }
+
+    // Remove markdown code blocks if present
+    let cleanContent = content.trim();
+    
+    // Remove ```json and ``` if present
+    if (cleanContent.startsWith('```json')) {
+      cleanContent = cleanContent.replace(/^```json\s*/, '');
+    }
+    if (cleanContent.startsWith('```')) {
+      cleanContent = cleanContent.replace(/^```\s*/, '');
+    }
+    if (cleanContent.endsWith('```')) {
+      cleanContent = cleanContent.replace(/\s*```$/, '');
+    }
+
+    // Remove any leading/trailing whitespace
+    cleanContent = cleanContent.trim();
+    console.log('cleanContent', cleanContent);
     try {
-      // Update conversation history
-      const history = this.conversationHistory.get(context.callSid) || [];
-      
-      // Add the latest exchanges to history
-      if (context.agentText) {
-        history.push(`Agent: ${context.agentText}`);
-      }
-      if (context.customerText) {
-        history.push(`Customer: ${context.customerText}`);
-      }
-      
-      // Keep only last 10 exchanges to manage token usage
-      const recentHistory = history.slice(-10);
-      this.conversationHistory.set(context.callSid, recentHistory);
-
-      // Only generate tips if we have meaningful conversation
-      if (recentHistory.length < 2) {
-        return null;
-      }
-
-      const conversationText = recentHistory.join('\n');
-
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4',
-        messages: [
-          {
-            role: 'system',
-            content: SALES_COACHING_PROMPT
-          },
-          {
-            role: 'user',
-            content: `Recent conversation:\n${conversationText}\n\nProvide a coaching tip based on this exchange.`
-          }
-        ],
-        max_tokens: 100,
-        temperature: 0.7,
-      });
-
-      const content = response.choices[0]?.message?.content;
-      if (!content) {
-        return null;
-      }
-
-      // Parse the JSON response
-      const tipData = JSON.parse(content);
-      
-      return {
-        id: `tip_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: tipData.type || 'suggestion',
-        message: tipData.message,
-        priority: tipData.priority || 'medium',
-        timestamp: new Date().toISOString(),
-        context: tipData.context
-      };
-
+      return JSON.parse(cleanContent);
     } catch (error) {
-      console.error('Error generating coaching tip:', error);
-      return null;
+      console.error('JSON parsing failed. Raw content:', content);
+      console.error('Cleaned content:', cleanContent);
+      throw new Error(`Failed to parse JSON response: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
-  async analyzeCustomerSentiment(customerText: string): Promise<{
-    sentiment: 'positive' | 'neutral' | 'negative';
-    confidence: number;
-    indicators: string[];
-  } | null> {
+  async generateCoachingTip(context: ConversationContext): Promise<any> {
     try {
+      const prompt = this.buildCoachingPrompt(context);
+      
       const response = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: "gpt-4o",
         messages: [
-          {
-            role: 'system',
-            content: `Analyze the customer's sentiment from their speech. Respond with JSON:
-            {
-              "sentiment": "positive|neutral|negative",
-              "confidence": 0.0-1.0,
-              "indicators": ["specific words or phrases that indicate sentiment"]
-            }`
-          },
-          {
-            role: 'user',
-            content: `Customer said: "${customerText}"`
-          }
+          { role: "system", content: this.systemPrompts.salesCoach },
+          { role: "user", content: prompt }
         ],
-        max_tokens: 150,
-        temperature: 0.3,
+        temperature: 0.7,
+        max_tokens: 500,
+        response_format: { type: "json_object" }
       });
 
       const content = response.choices[0]?.message?.content;
-      if (!content) {
-        return null;
-      }
+      if (!content) throw new Error('No response from OpenAI');
+      console.log('coaching tip', content);
+      return this.parseJsonResponse(content);
+    } catch (error) {
+      console.error('Error generating coaching tip:', error);
+      throw error;
+    }
+  }
 
-      return JSON.parse(content);
+  private buildCoachingPrompt(context: ConversationContext): string {
+    const { agentText, customerText, analytics, customerProfile } = context;
+    
+    return `
+CONVERSATION ANALYSIS REQUEST:
+
+LATEST EXCHANGE:
+Agent: "${agentText}"
+Customer: "${customerText}"
+
+CURRENT CONTEXT:
+${analytics ? `
+- Conversation Stage: ${analytics.conversationStage}
+- Customer Sentiment: ${analytics.customerSentiment}  
+- Talk Ratio: Agent ${analytics.talkRatio?.agent?.toFixed(1)}%, Customer ${analytics.talkRatio?.customer?.toFixed(1)}%
+- Risk Factors: ${analytics.riskFactors?.join(', ') || 'None identified'}
+- Opportunities: ${analytics.opportunities?.join(', ') || 'None identified'}
+` : 'Context analysis in progress...'}
+
+${customerProfile ? `
+CUSTOMER PROFILE:
+- Industry: ${customerProfile.industry || 'Unknown'}
+- Company Size: ${customerProfile.companySize || 'Unknown'}
+- Previous Interactions: ${customerProfile.previousInteractions || 'None'}
+- Pain Points: ${customerProfile.knownPainPoints || 'To be discovered'}
+` : ''}
+
+COACHING REQUEST:
+Based on this conversation context, provide ONE specific, immediately actionable coaching tip.
+
+RESPOND WITH ONLY THIS JSON STRUCTURE (no markdown, no code blocks):
+{
+  "type": "suggestion",
+  "category": "rapport",
+  "message": "Specific, actionable tip (50-100 words)",
+  "priority": "medium",
+  "relevanceScore": 85,
+  "suggestedResponse": "Exact words for agent to say",
+  "reasoning": "Why this tip is important right now",
+  "expectedOutcome": "What should happen if agent follows this advice"
+}`;
+  }
+
+  async analyzeSentiment(text: string, speaker: 'agent' | 'customer'): Promise<any> {
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: this.systemPrompts.sentimentAnalyzer },
+          { 
+            role: "user", 
+            content: `Analyze the sentiment and intent of this ${speaker} statement: "${text}"
+            
+            Respond with ONLY this JSON (no markdown, no code blocks):
+            {
+              "sentiment": "positive",
+              "confidence": 0.8,
+              "intent": "information_seeking",
+              "emotions": ["curious", "interested"],
+              "buyingSignals": [],
+              "riskIndicators": [],
+              "keyPhrases": ["important phrases"],
+              "reasoning": "explanation of analysis"
+            }`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 300,
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0]?.message?.content;
+      console.log('sentiment analysis', content);
+      return content ? this.parseJsonResponse(content) : null;
     } catch (error) {
       console.error('Error analyzing sentiment:', error);
       return null;
     }
   }
 
-  // Clean up conversation history when call ends
-  clearConversationHistory(callSid: string): void {
-    this.conversationHistory.delete(callSid);
-  }
-
-  // Get conversation summary for the call
-  async getConversationSummary(callSid: string): Promise<string | null> {
+  async analyzePerformance(conversationTurns: any[], analytics: any): Promise<any> {
     try {
-      const history = this.conversationHistory.get(callSid);
-      if (!history || history.length === 0) {
-        return null;
-      }
-
-      const conversationText = history.join('\n');
+      const conversationText = conversationTurns
+        .slice(-10) // Last 10 turns
+        .map(turn => `${turn.speaker}: "${turn.text}"`)
+        .join('\n');
 
       const response = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: "gpt-4o",
         messages: [
-          {
-            role: 'system',
-            content: 'Summarize this sales conversation highlighting key points, objections, and outcomes. Keep it concise (max 100 words).'
-          },
-          {
-            role: 'user',
-            content: conversationText
+          { role: "system", content: this.systemPrompts.performanceAnalyzer },
+          { 
+            role: "user", 
+            content: `Analyze this sales conversation performance:
+
+CONVERSATION EXCERPT:
+${conversationText}
+
+CURRENT ANALYTICS:
+- Stage: ${analytics.conversationStage}
+- Customer Sentiment: ${analytics.customerSentiment}
+- Talk Ratio: Agent ${analytics.talkRatio?.agent?.toFixed(1)}%, Customer ${analytics.talkRatio?.customer?.toFixed(1)}%
+
+Provide ONLY this JSON (no markdown, no code blocks):
+{
+  "overallScore": 75,
+  "strengths": ["what agent is doing well"],
+  "improvements": ["specific areas to improve"],
+  "riskFactors": ["conversation risks"],
+  "opportunities": ["missed or potential opportunities"],
+  "nextBestActions": ["immediate recommended actions"],
+  "strategicAdvice": "high-level guidance for this conversation",
+  "reasoning": "detailed explanation of assessment"
+}`
           }
         ],
-        max_tokens: 150,
-        temperature: 0.5,
+        temperature: 0.4,
+        max_tokens: 600,
+        response_format: { type: "json_object" }
       });
 
-      return response.choices[0]?.message?.content || null;
+      const content = response.choices[0]?.message?.content;
+      console.log('performance analysis', content);
+      return content ? this.parseJsonResponse(content) : null;
     } catch (error) {
-      console.error('Error generating conversation summary:', error);
+      console.error('Error analyzing performance:', error);
       return null;
+    }
+  }
+
+  async generateCallSummary(conversationTurns: any[], analytics: any): Promise<any> {
+    try {
+      const fullConversation = conversationTurns
+        .map(turn => `${turn.speaker}: "${turn.text}"`)
+        .join('\n');
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { 
+            role: "system", 
+            content: "You are an expert sales call analyst. Create comprehensive, actionable call summaries. RESPOND WITH ONLY VALID JSON - no markdown, no code blocks." 
+          },
+          { 
+            role: "user", 
+            content: `Analyze this complete sales conversation and provide a comprehensive summary:
+
+FULL CONVERSATION:
+${fullConversation}
+
+FINAL ANALYTICS:
+${JSON.stringify(analytics, null, 2)}
+
+Provide ONLY this JSON structure (no markdown, no code blocks):
+{
+  "outcome": "advancing",
+  "keyMoments": ["important conversation highlights"],
+  "customerProfile": {
+    "painPoints": ["identified pain points"],
+    "motivations": ["what drives customer"],
+    "objections": ["concerns raised"],
+    "buyingSignals": ["positive indicators"]
+  },
+  "agentPerformance": {
+    "score": 75,
+    "strengths": ["what worked well"],
+    "improvements": ["specific areas to improve"],
+    "missedOpportunities": ["what could have been better"]
+  },
+  "actionItems": ["specific follow up actions"],
+  "nextCallStrategy": "recommended approach for next interaction",
+  "coachingFocus": ["areas for agent development"],
+  "dealProbability": 75,
+  "reasoning": "detailed explanation of assessment"
+}`
+          }
+        ],
+        temperature: 0.5,
+        max_tokens: 1000,
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0]?.message?.content;
+      console.log('call summary', content);
+      return content ? this.parseJsonResponse(content) : null;
+    } catch (error) {
+      console.error('Error generating call summary:', error);
+      return null;
+    }
+  }
+
+  async chat(messages: any[], options: any = {}): Promise<string> {
+    try {
+      const response = await openai.chat.completions.create({
+        model: options.model || "gpt-4o",
+        messages,
+        temperature: options.temperature || 0.7,
+        max_tokens: options.max_tokens || 500,
+        ...options
+      });
+
+      return response.choices[0]?.message?.content || '';
+    } catch (error) {
+      console.error('Error in chat completion:', error);
+      throw error;
     }
   }
 }
 
-export const openaiService = new OpenAIService(); 
+export const openaiService = new EnhancedOpenAIService();
