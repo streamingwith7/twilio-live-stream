@@ -1,4 +1,5 @@
 import { openaiService } from '@/lib/openai-service'
+const { COACHING_RULES } = require('./prompts-store');
 
 interface ConversationTurn {
   speaker: 'agent' | 'customer';
@@ -20,20 +21,15 @@ interface CallAnalytics {
   opportunities: string[];
 }
 
-interface EnhancedCoachingTip {
+// Simplified coaching tip interface
+interface SimpleCoachingTip {
   id: string;
-  type: 'suggestion' | 'opportunity' | 'next_step' | 'response' | 'warning' | 'strategy';
-  category: 'rapport' | 'discovery' | 'presentation' | 'objection_handling' | 'closing' | 'general';
-  message: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  relevanceScore: number; // 0-100
-  timestamp: string;
-  context: string;
-  callSid: string;
-  conversationStage: string;
-  suggestedResponse?: string;
+  tip: string;
+  urgency: 'low' | 'medium' | 'high';
   reasoning: string;
-  expectedOutcome?: string;
+  callSid: string;
+  timestamp: string;
+  conversationStage: string;
 }
 
 class EnhancedConversationTracker {
@@ -41,7 +37,7 @@ class EnhancedConversationTracker {
     turns: ConversationTurn[];
     analytics: CallAnalytics;
     lastTipTime: number;
-    tipHistory: EnhancedCoachingTip[];
+    tipHistory: SimpleCoachingTip[];
     callStartTime: number;
     customerProfile?: any;
   }>();
@@ -273,9 +269,10 @@ class EnhancedCoachingService {
     track: string,
     transcriptionData: string,
     timestamp: string
-  ): Promise<EnhancedCoachingTip | null> {
+  ): Promise<SimpleCoachingTip | null> {
     try {
-      const speaker = track === 'inbound_track' ? 'agent' : 'customer';
+      console.log('transcriptionData', transcriptionData);
+      const speaker = track === 'outbound_track' ? 'agent' : 'customer';
       
       let actualTranscript = transcriptionData;
       try {
@@ -298,12 +295,13 @@ class EnhancedCoachingService {
       const minTimeBetweenTips = this.calculateMinTimeBetweenTips(conversation.analytics);
 
       if (timeSinceLastTip < minTimeBetweenTips) {
+        console.log('returned null');
         return null;
       }
 
       const tip = await this.generateEnhancedTip(callSid, conversation);
       
-      if (tip && tip.relevanceScore >= 70) {
+      if (tip) {
         console.log('tip', tip);
         conversation.lastTipTime = now;
         conversation.tipHistory.push(tip);
@@ -330,68 +328,38 @@ class EnhancedCoachingService {
   private async generateEnhancedTip(
     callSid: string,
     conversation: any
-  ): Promise<EnhancedCoachingTip | null> {
+  ): Promise<SimpleCoachingTip | null> {
     const { turns, analytics } = conversation;
     console.log('conversation', conversation);
-    const recentTurns = turns.slice(-6);
     
-    const prompt = `
-You are an AI sales coach providing real-time guidance. Analyze this conversation and provide ONE specific, actionable tip.
-
-CONVERSATION CONTEXT:
-- Stage: ${analytics.conversationStage}
-- Customer Sentiment: ${analytics.customerSentiment}
-- Talk Ratio: Agent ${analytics.talkRatio.agent.toFixed(1)}%, Customer ${analytics.talkRatio.customer.toFixed(1)}%
-- Risk Factors: ${analytics.riskFactors.join(', ') || 'None'}
-- Opportunities: ${analytics.opportunities.join(', ') || 'None'}
-
-RECENT CONVERSATION:
-${recentTurns.map((turn: { speaker: any; text: any; sentiment: any; }, i: any) => `${turn.speaker}: "${turn.text}" (${turn.sentiment})`).join('\n')}
-
-COACHING GUIDELINES:
-1. Be specific and actionable
-2. Consider the conversation stage and customer sentiment
-3. Address any risk factors
-4. Capitalize on opportunities
-5. Keep tips under 100 words
-6. Include a suggested response when appropriate
-
-Provide your response in this JSON format without any commentary, Only JSON:
-{
-  "type": "suggestion|opportunity|next_step|response|warning|strategy",
-  "category": "rapport|discovery|presentation|objection_handling|closing|general",
-  "message": "Your coaching tip",
-  "priority": "low|medium|high|urgent",
-  "relevanceScore": 0-100,
-  "suggestedResponse": "optional specific response for agent to use",
-  "reasoning": "why this tip is important now",
-  "expectedOutcome": "what should happen if agent follows this tip"
-}
-`;
+    if (turns.length < 2) return null;
+    
+    const lastAgentTurn = turns.filter((t: ConversationTurn) => t.speaker === 'agent').slice(-1)[0];
+    const lastCustomerTurn = turns.filter((t: ConversationTurn) => t.speaker === 'customer').slice(-1)[0];
+    
+    if (!lastAgentTurn || !lastCustomerTurn) return null;
 
     try {
-      const response = await openaiService.chat([
-        { role: 'system', content: 'You are an expert sales coach. Always respond with valid JSON only.' },
-        { role: 'user', content: prompt },
-      ],
-      {
-        response_format: { type: "json_object" }
-      }
-    );
-
-      const tipData = JSON.parse(response);
+      const tipData = await openaiService.generateCoachingTip({
+        agentText: lastAgentTurn.text,
+        customerText: lastCustomerTurn.text,
+        callSid,
+        timestamp: new Date().toISOString(),
+        analytics
+      });
       
       return {
         id: `tip_${callSid}_${Date.now()}`,
+        tip: tipData.tip,
+        urgency: tipData.urgency,
+        reasoning: tipData.reasoning,
         callSid,
         timestamp: new Date().toISOString(),
-        conversationStage: analytics.conversationStage,
-        context: `Stage: ${analytics.conversationStage}, Sentiment: ${analytics.customerSentiment}`,
-        ...tipData
+        conversationStage: analytics.conversationStage
       };
       
     } catch (error) {
-      console.error('Error generating enhanced tip:', error);
+      console.error('Error generating tip:', error);
       return null;
     }
   }

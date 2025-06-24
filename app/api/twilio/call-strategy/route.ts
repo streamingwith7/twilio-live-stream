@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     const conversation = coachingService.getCallAnalytics(callSid);
     
-    const speaker = track === 'inbound_track' ? 'agent' : 'customer';
+    const speaker = track === 'outbound_track' ? 'agent' : 'customer';
     const result = await callStrategyService.processTranscript(
       callSid,
       transcriptionData,

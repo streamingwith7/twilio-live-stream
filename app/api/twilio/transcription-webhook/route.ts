@@ -21,7 +21,6 @@ export async function POST(request: NextRequest) {
     switch (transcriptionEvent) {
       case 'transcription-started':
         console.log('🎙️ Enhanced transcription started for call:', callSid)
-        console.log('body', body);
         callStateTracker.set(callSid, {
           callStartTime: Date.now(),
           stage: 'started'
@@ -83,12 +82,12 @@ export async function POST(request: NextRequest) {
 
             if (enhancedTip) {
               global.io.to(`coaching_${callSid}`).emit('enhancedCoachingTip', enhancedTip);
-              console.log(`🤖 Enhanced coaching tip for call ${callSid}:`, enhancedTip.message);
+              console.log(`🤖 Enhanced coaching tip for call ${callSid}:`, enhancedTip);
             }
 
             console.log(`🎯 Processing call strategy for call ${callSid}`);
             const conversation = coachingService.getCallAnalytics(callSid);
-            const speaker = track === 'inbound_track' ? 'agent' : 'customer';
+            const speaker = track === 'outbound_track' ? 'agent' : 'customer';
             
             const strategyResult = await callStrategyService.processTranscript(
               callSid,
@@ -115,7 +114,6 @@ export async function POST(request: NextRequest) {
               console.log(`🎯 Call strategy updated for call ${callSid}, version ${strategyResult.strategy.version}`);
             }
 
-            // Emit updated analytics
             const analytics = coachingService.getCallAnalytics(callSid);
             if (analytics) {
               global.io.to(`coaching_${callSid}`).emit('analyticsUpdate', {
@@ -125,11 +123,9 @@ export async function POST(request: NextRequest) {
               });
             }
 
-            // Emit conversation insights periodically
             const callState = callStateTracker.get(callSid);
             const callDuration = callState ? Date.now() - callState.callStartTime : 0;
             
-            // Send insights every 2 minutes
             if (callDuration > 0 && callDuration % 120000 < 5000) {
               const summary = coachingService.generateCallSummary(callSid);
               if (summary) {
@@ -147,7 +143,6 @@ export async function POST(request: NextRequest) {
       case 'transcription-stopped':
         console.log('🛑 Enhanced transcription stopped for call:', callSid)
         
-        // Generate final call summary
         const finalSummary = coachingService.generateCallSummary(callSid);
         
         if (global.io) {

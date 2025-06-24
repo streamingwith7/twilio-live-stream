@@ -30,14 +30,12 @@ export default function RealTimeTranscription({
   const [socket, setSocket] = useState<Socket | null>(null)
   const transcriptContainerRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (transcriptContainerRef.current) {
       transcriptContainerRef.current.scrollTop = transcriptContainerRef.current.scrollHeight
     }
   }, [transcriptMessages, currentTranscript])
 
-  // Initialize socket connection
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token || !isCallActive) return
