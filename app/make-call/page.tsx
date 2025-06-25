@@ -6,7 +6,6 @@ import { io, Socket } from 'socket.io-client'
 import { PhoneNumber, CallStatus, User } from '@/types'
 import Navigation from '@/components/Navigation'
 import Dialer from '@/components/Dialer'
-import LiveStreamPlayer from '@/components/LiveStreamPlayer'
 import LoadingSpinner from '@/components/LoadingSpinner'
 import IncomingCallModal from '@/components/IncomingCallModal'
 import RealTimeTranscription from '@/components/RealTimeTranscription'
@@ -138,7 +137,7 @@ export default function MakeCallPage() {
         }
         setTimeout(() => {
           setActiveCalls(prev => prev.filter(call => call.callSid !== data.callSid))
-        }, 10000) // Remove after 10 seconds
+        }, 10000)
       }
     })
 
