@@ -61,6 +61,15 @@ export async function POST(request: NextRequest) {
             allParams: Object.fromEntries(body.entries())
           })
         };
+        
+        if (global.callStateTracker) {
+          global.callStateTracker.set(callSid, {
+            callStartTime: Date.now(),
+            stage: 'initiated',
+            isOutboundCall: true
+          });
+        console.log('callStateTracker', global.callStateTracker.get(callSid));
+        }
         twiml = `
         <Response>
           <Start>
@@ -116,6 +125,13 @@ export async function POST(request: NextRequest) {
         console.log('📡 Incoming call broadcasted to', connectedClients, 'clients:', callData)
       } else {
         console.error('❌ Socket.IO not available! Cannot notify web clients')
+      }
+      if (global.callStateTracker) {
+        global.callStateTracker.set(callSid, {
+          callStartTime: Date.now(),
+          stage: 'initiated',
+          isOutboundCall: false
+        });
       }
 
       let clientDialXML = ''

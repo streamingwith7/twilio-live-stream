@@ -37,7 +37,6 @@ export default function MakeCallPage() {
   const [isCallActive, setIsCallActive] = useState(false)
   const router = useRouter()
 
-  // Voice client handlers
   const handleVoiceError = useCallback((errorMessage: string) => {
     setError(errorMessage)
     setTimeout(() => setError(null), 5000)

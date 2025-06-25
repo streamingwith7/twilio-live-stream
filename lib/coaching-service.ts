@@ -268,11 +268,10 @@ class EnhancedCoachingService {
     callSid: string,
     track: string,
     transcriptionData: string,
-    timestamp: string
+    timestamp: string,
+    speaker: 'agent' | 'customer'
   ): Promise<SimpleCoachingTip | null> {
     try {
-      console.log('transcriptionData', transcriptionData);
-      const speaker = track === 'outbound_track' ? 'agent' : 'customer';
       
       let actualTranscript = transcriptionData;
       try {
@@ -302,7 +301,6 @@ class EnhancedCoachingService {
       const tip = await this.generateEnhancedTip(callSid, conversation);
       
       if (tip) {
-        console.log('tip', tip);
         conversation.lastTipTime = now;
         conversation.tipHistory.push(tip);
         return tip;
@@ -332,8 +330,10 @@ class EnhancedCoachingService {
     const { turns, analytics } = conversation;
     console.log('conversation', conversation);
     
-    if (turns.length < 2) return null;
-    
+    if (turns.length < 2) {
+      console.log('turns.length < 2');
+      return null;
+    }    
     const lastAgentTurn = turns.filter((t: ConversationTurn) => t.speaker === 'agent').slice(-1)[0];
     const lastCustomerTurn = turns.filter((t: ConversationTurn) => t.speaker === 'customer').slice(-1)[0];
     

@@ -295,7 +295,6 @@ Create a comprehensive call strategy.`
     conversationContext: any
   ): Promise<{ requirements: ClientRequirement[], strategy: CallStrategy | null }> {
     try {
-      // Analyze for new requirements
       const newRequirements = await this.analyzeClientRequirements(
         callSid,
         transcript,
@@ -303,7 +302,6 @@ Create a comprehensive call strategy.`
         conversationContext
       );
 
-      // If we found new requirements, update the strategy
       let strategy = null;
       if (newRequirements.length > 0) {
         const allRequirements = this.requirements.get(callSid) || [];
@@ -326,7 +324,6 @@ Create a comprehensive call strategy.`
   }
 
   endCall(callSid: string) {
-    // Clean up data when call ends
     this.strategies.delete(callSid);
     this.requirements.delete(callSid);
   }

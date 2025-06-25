@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { coachingService } from '@/lib/coaching-service'
 import { callStrategyService } from '@/lib/call-strategy-service'
 
-const callStateTracker = new Map<string, {
-  customerData?: any;
-  callStartTime: number;
-  stage: string;
-}>();
+// Initialize global callStateTracker if not exists
+if (!global.callStateTracker) {
+  global.callStateTracker = new Map<string, {
+    customerData?: any;
+    callStartTime: number;
+    stage: string;
+    isOutboundCall?: boolean;
+  }>();
+}
+
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,11 +25,18 @@ export async function POST(request: NextRequest) {
 
     switch (transcriptionEvent) {
       case 'transcription-started':
-        console.log('🎙️ Enhanced transcription started for call:', callSid)
-        callStateTracker.set(callSid, {
-          callStartTime: Date.now(),
-          stage: 'started'
-        });
+        const existingState = global.callStateTracker?.get(callSid);
+        if (existingState) {
+          global.callStateTracker?.set(callSid, {
+            ...existingState,
+            stage: 'started'
+          });
+        } else {
+          global.callStateTracker?.set(callSid, {
+            callStartTime: Date.now(),
+            stage: 'started'
+          });
+        }
 
         if (global.io) {
           global.io.to(`transcription_${callSid}`).emit('transcriptionStarted', {
@@ -63,32 +75,31 @@ export async function POST(request: NextRequest) {
             Enhanced: true
           }
 
+          const callStateInfo = global.callStateTracker?.get(callSid);
+          const isOutboundCall = callStateInfo?.isOutboundCall || false;
+          let speaker: 'agent' | 'customer';
           global.io.to(`transcription_${callSid}`).emit('transcriptionContent', transcriptEvent)
-
+          if (isOutboundCall) {
+            speaker = track === 'inbound_track' ? 'agent' : 'customer';
+          } else {
+            speaker = track === 'outbound_track' ? 'agent' : 'customer';
+          }
           if (final === 'true' && transcriptionData && transcriptionData.trim().length > 0) {
             console.log(`🤖 Processing enhanced coaching for call ${callSid}`, transcriptionData);
-            console.log('callData', {
-              transcriptionData,
-              track
-            });
-            
             const enhancedTip = await coachingService.processTranscript(
-              callSid, 
-              track, 
+              callSid,
+              track,
               transcriptionData,
-              timestamp
+              timestamp,
+              speaker
             );
 
 
             if (enhancedTip) {
               global.io.to(`coaching_${callSid}`).emit('enhancedCoachingTip', enhancedTip);
-              console.log(`🤖 Enhanced coaching tip for call ${callSid}:`, enhancedTip);
             }
 
-            console.log(`🎯 Processing call strategy for call ${callSid}`);
             const conversation = coachingService.getCallAnalytics(callSid);
-            const speaker = track === 'outbound_track' ? 'agent' : 'customer';
-            
             const strategyResult = await callStrategyService.processTranscript(
               callSid,
               transcriptionData,
@@ -102,7 +113,6 @@ export async function POST(request: NextRequest) {
                 requirements: strategyResult.requirements,
                 timestamp: new Date().toISOString()
               });
-              console.log(`🎯 New client requirements for call ${callSid}:`, strategyResult.requirements.length);
             }
 
             if (strategyResult.strategy) {
@@ -111,7 +121,6 @@ export async function POST(request: NextRequest) {
                 strategy: strategyResult.strategy,
                 timestamp: new Date().toISOString()
               });
-              console.log(`🎯 Call strategy updated for call ${callSid}, version ${strategyResult.strategy.version}`);
             }
 
             const analytics = coachingService.getCallAnalytics(callSid);
@@ -123,9 +132,9 @@ export async function POST(request: NextRequest) {
               });
             }
 
-            const callState = callStateTracker.get(callSid);
+            const callState = global.callStateTracker?.get(callSid);
             const callDuration = callState ? Date.now() - callState.callStartTime : 0;
-            
+
             if (callDuration > 0 && callDuration % 120000 < 5000) {
               const summary = coachingService.generateCallSummary(callSid);
               if (summary) {
@@ -142,9 +151,9 @@ export async function POST(request: NextRequest) {
 
       case 'transcription-stopped':
         console.log('🛑 Enhanced transcription stopped for call:', callSid)
-        
+
         const finalSummary = coachingService.generateCallSummary(callSid);
-        
+
         if (global.io) {
           global.io.to(`transcription_${callSid}`).emit('transcriptionStopped', {
             callSid,
@@ -161,10 +170,9 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // Clean up
         coachingService.endCall(callSid);
         callStrategyService.endCall(callSid);
-        callStateTracker.delete(callSid);
+        global.callStateTracker?.delete(callSid);
         break
 
       case 'transcription-error':
@@ -186,7 +194,6 @@ export async function POST(request: NextRequest) {
             enhanced: true
           });
 
-          // Emit coaching error
           global.io.to(`coaching_${callSid}`).emit('coachingError', {
             callSid,
             error: 'Transcription service error - coaching temporarily unavailable',
@@ -211,7 +218,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Enhanced transcription webhook error:', error)
-    
+
     return new NextResponse(
       '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
       {
@@ -246,9 +253,9 @@ export async function GET(request: NextRequest) {
 
       case 'insights':
         const insights = coachingService.generateCallSummary(callSid);
-        return NextResponse.json({ 
-          callSid, 
-          insights: insights?.keyInsights || [] 
+        return NextResponse.json({
+          callSid,
+          insights: insights?.keyInsights || []
         });
 
       default:
