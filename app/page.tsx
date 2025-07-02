@@ -46,7 +46,6 @@ export default function Home() {
     setSuccess('')
 
     if (!isLogin) {
-      // Registration logic
       if (password !== confirmPassword) {
         setError('Passwords do not match')
         setLoading(false)
@@ -93,7 +92,6 @@ export default function Home() {
         setLoading(false)
       }
     } else {
-      // Login logic
       try {
         const response = await fetch('/api/auth/signin', {
           method: 'POST',
@@ -125,7 +123,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-900/90 via-purple-900/80 to-indigo-900/90 z-10"></div>
         <img
@@ -135,9 +132,7 @@ export default function Home() {
         />
       </div>
 
-      {/* Content */}
       <div className="relative z-20 min-h-screen flex">
-        {/* Left Side - Content */}
         <div className="flex-1 flex flex-col justify-center px-8 lg:px-16 xl:px-24">
           <div className="max-w-2xl">
             <div className="mb-8">
@@ -186,12 +181,10 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right Side - Login/Register Form */}
         <div className="w-full lg:w-[600px] xl:w-[680px] flex items-center justify-center p-8">
           <div className="w-full max-w-lg">
             <div className="backdrop-blur-lg bg-white/10 rounded-2xl shadow-2xl border border-white/20 p-8">
               
-              {/* Toggle Buttons */}
               <div className="flex bg-white/5 rounded-lg p-1 mb-6">
                 <button
                   onClick={() => setIsLogin(false)}

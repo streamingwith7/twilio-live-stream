@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { coachingService } from '@/lib/coaching-service'
 import { callStrategyService } from '@/lib/call-strategy-service'
 
-// Initialize global callStateTracker if not exists
 if (!global.callStateTracker) {
   global.callStateTracker = new Map<string, {
     customerData?: any;

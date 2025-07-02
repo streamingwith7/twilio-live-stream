@@ -20,10 +20,8 @@ export async function POST(request: NextRequest) {
       allParams: Object.fromEntries(body.entries())
     })
 
-    // Determine if this is an outbound browser call
     const isOutboundBrowserCall = from && from.startsWith('client:')
 
-    // Notify web clients about dial result
     if (global.io) {
       global.io.emit('dialResult', {
         callSid,

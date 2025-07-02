@@ -129,7 +129,6 @@ app.prepare().then(() => {
       });
     });
 
-    // Transcription room handlers
     socket.on('joinTranscriptionRoom', (callSid) => {
       if (!callSid) {
         socket.emit('transcriptionRoomError', { error: 'CallSid is required' });
@@ -139,15 +138,12 @@ app.prepare().then(() => {
       const transcriptionRoom = `transcription_${callSid}`;
       socket.join(transcriptionRoom);
       console.log(`🎙️ Socket ${socket.id} joined transcription room for call ${callSid}`);
-      
-      // Notify the client they've joined the transcription room
       socket.emit('transcriptionRoomJoined', { 
         callSid, 
         room: transcriptionRoom,
         timestamp: new Date().toISOString()
       });
 
-      // If there's an active transcription stream for this call, notify the client
       const activeStream = activeStreams.get(callSid);
       if (activeStream) {
         socket.emit('transcriptionReady', {
@@ -463,28 +459,7 @@ app.prepare().then(() => {
       }
     });
   });
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('🛑 Shutting down gracefully...');
-    
-    // Close all active Deepgram connections
-    for (const [ws, deepgramConnection] of activeConnections) {
-      try {
-        deepgramConnection.finish();
-      } catch (error) {
-        console.error('❌ Error closing Deepgram connection during shutdown:', error);
-      }
-    }
-    
-    activeConnections.clear();
-    activeStreams.clear();
-    
-    httpServer.close(() => {
-      console.log('✅ Server closed');
-      process.exit(0);
-    });
-  });
-  // Health check endpoint for active streams
+
   httpServer.on('request', (req, res) => {
     const parsedUrl = parse(req.url, true);
     

@@ -105,37 +105,11 @@ export default function Dialer({
         onCallInitiated?.({ type: 'browser-call', to: formattedToNumber, from: selectedFromNumber })
         setPhoneNumber('')
         return
-      }
+        }
 
       console.log('Making server-side call')
-    setIsDialing(true)
+      setIsDialing(true)
 
-      const token = localStorage.getItem('token')
-      const userData = localStorage.getItem('user')
-      const user = userData ? JSON.parse(userData) : null
-
-      const response = await fetch('/api/twilio/make-call', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          fromNumber: selectedFromNumber,
-          toNumber: formattedToNumber,
-          userId: user?.id
-        })
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        saveToRecent(phoneNumber)
-        onCallInitiated?.(data)
-        setPhoneNumber('')
-      } else {
-        onError?.(data.error || 'Failed to initiate call')
-      }
     } catch (error) {
       onError?.('Failed to initiate call')
     } finally {

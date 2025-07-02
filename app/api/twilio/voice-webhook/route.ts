@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
     const to = body.get('To') as string
     const callSid = body.get('CallSid') as string
     const callStatus = body.get('CallStatus') as string || 'initiated'
+    const caller = body.get('Caller') as string
 
     console.log('📞 Call details:', {
       from,
@@ -22,21 +23,15 @@ export async function POST(request: NextRequest) {
     })
 
 
-    // Determine if this is an incoming call (to Twilio number) or outbound call (from browser client)
     const isOutboundBrowserCall = from && from.startsWith('client:')
-    const isIncomingCall = !isOutboundBrowserCall
 
     console.log('📞 Call type:', isOutboundBrowserCall ? 'Outbound Browser Call' : 'Incoming Call')
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://closemydeals.com'
 
-    const wsUrl = baseUrl.replace('https://', 'wss://').replace('http://', 'ws://')
-
     let twiml = ''
 
     if (isOutboundBrowserCall) {
-      console.log('🚀 Handling outbound browser call from', from, 'to', to)
-
       const callerId = (body.get('CallerId') as string) || process.env.TWILIO_PHONE_NUMBER
 
       if (!callerId) {
@@ -49,27 +44,29 @@ export async function POST(request: NextRequest) {
       } else {
         const languageCode = 'en-US';
         const track = 'both_tracks';
-        console.log('tracking working');
+        
+        if (global.callStateTracker) {
+          global.callStateTracker.set(callSid, {
+            callStartTime: Date.now(),
+            stage: 'initiated', 
+            isOutboundCall: true
+          });
+        console.log('callStateTracker', global.callStateTracker.get(callSid));
+        }
+        
         if (global.io) {
         global.io.emit('callInitiated', {
           from,
           to,
           callSid,
           callStatus,
+          caller,
           callerId: body.get('CallerId'),
             timestamp: new Date().toISOString(),
             allParams: Object.fromEntries(body.entries())
           })
         };
         
-        if (global.callStateTracker) {
-          global.callStateTracker.set(callSid, {
-            callStartTime: Date.now(),
-            stage: 'initiated',
-            isOutboundCall: true
-          });
-        console.log('callStateTracker', global.callStateTracker.get(callSid));
-        }
         twiml = `
         <Response>
           <Start>

@@ -37,13 +37,10 @@ export function useVoiceClient({
 
   const initializeDevice = async () => {
     try {
-      // Check if Twilio Voice SDK is available
       if (typeof window === 'undefined') return
 
-      // Import Twilio Voice SDK dynamically
       const { Device } = await import('@twilio/voice-sdk')
 
-      // Get access token from our API
       const tokenData = await getAccessToken()
       
       if (!tokenData) {
@@ -51,22 +48,16 @@ export function useVoiceClient({
         return
       }
 
-      // Initialize Twilio Device with enhanced configuration
       const newDevice = new Device(tokenData.token, {
         logLevel: 'debug',
-        // Add edge locations for better connectivity
         edge: ['sydney', 'dublin', 'tokyo'],
-        // Set timeout values
         maxAverageBitrate: 16000,
-        // Add connection retry options
         allowIncomingWhileBusy: false
       })
 
-      // Setup device event listeners
       setupDeviceListeners(newDevice)
 
       try {
-        // Register the device with retry logic
         await newDevice.register()
         
         deviceRef.current = newDevice
@@ -261,7 +252,6 @@ export function useVoiceClient({
         notification.close()
       }
 
-      // Auto-close notification after 30 seconds
       setTimeout(() => {
         notification.close()
       }, 30000)

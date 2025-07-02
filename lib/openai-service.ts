@@ -5,10 +5,13 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-interface ConversationContext {
-  agentText: string;
-  customerText: string;
+export interface ConversationContext {
+  agentText?: string;
+  customerText?: string;
   conversationHistory?: any[];
+  fullConversation?: string;
+  recentCustomerText?: string;
+  previousTips?: any[];
   callSid: string;
   timestamp: string;
   analytics?: any;
@@ -22,25 +25,11 @@ class EnhancedOpenAIService {
       throw new Error('Empty response from OpenAI');
     }
 
-    let cleanContent = content.trim();
-    
-    if (cleanContent.startsWith('```json')) {
-      cleanContent = cleanContent.replace(/^```json\s*/, '');
-    }
-    if (cleanContent.startsWith('```')) {
-      cleanContent = cleanContent.replace(/^```\s*/, '');
-    }
-    if (cleanContent.endsWith('```')) {
-      cleanContent = cleanContent.replace(/\s*```$/, '');
-    }
-
-    cleanContent = cleanContent.trim();
-    console.log('cleanContent', cleanContent);
     try {
-      return JSON.parse(cleanContent);
+      return JSON.parse(content);
     } catch (error) {
       console.error('JSON parsing failed. Raw content:', content);
-      console.error('Cleaned content:', cleanContent);
+      console.error('Cleaned content:', content);
       throw new Error(`Failed to parse JSON response: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
@@ -48,11 +37,15 @@ class EnhancedOpenAIService {
   async generateCoachingTip(context: ConversationContext): Promise<any> {
     try {
       const prompt = PROMPT_HELPERS.buildCoachingContext(
-        context.agentText, 
-        context.customerText, 
-        context.analytics?.conversationStage
+        context.fullConversation || '', 
+        context.analytics, 
+        context.recentCustomerText || '',
+        context.previousTips || []
       );
-      
+
+      console.log('coaching tip prompt', prompt);
+      console.log('system prompt', SALES_COACHING_PROMPTS.salesCoach);
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
@@ -60,13 +53,14 @@ class EnhancedOpenAIService {
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: 200,
         response_format: { type: "json_object" }
       });
 
       const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No response from OpenAI');
+
       console.log('coaching tip', content);
+
+      if (!content) throw new Error('No response from OpenAI');
       return this.parseJsonResponse(content);
     } catch (error) {
       console.error('Error generating coaching tip:', error);
@@ -103,7 +97,7 @@ class EnhancedOpenAIService {
   async analyzePerformance(conversationTurns: any[], analytics: any): Promise<any> {
     try {
       const conversationText = conversationTurns
-        .slice(-10) // Last 10 turns
+        .slice(-10)
         .map(turn => `${turn.speaker}: "${turn.text}"`)
         .join('\n');
 

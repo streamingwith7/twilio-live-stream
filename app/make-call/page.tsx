@@ -20,6 +20,7 @@ interface ActiveCall {
   status: string
   direction: string
   timestamp: string
+  caller: string
 }
 
 export default function MakeCallPage() {
@@ -27,7 +28,6 @@ export default function MakeCallPage() {
   const [loading, setLoading] = useState(true)
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
   const [socket, setSocket] = useState<Socket | null>(null)
-  const [activeCalls, setActiveCalls] = useState<ActiveCall[]>([])
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [incomingCall, setIncomingCall] = useState<any>(null)
@@ -82,13 +82,13 @@ export default function MakeCallPage() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     const userData = localStorage.getItem('user')
-
+    const tempUser = JSON.parse(userData || '{}');
     if (!token || !userData) {
       router.push('/')
       return
     }
 
-    setUser(JSON.parse(userData))
+    setUser(tempUser)
     setLoading(false)
     
     const newSocket = io({
@@ -102,57 +102,27 @@ export default function MakeCallPage() {
       reconnectionDelay: 1000,
       reconnectionAttempts: 5
     })
-
-    newSocket.on('connect', () => {
-      console.log('Connected to calling server')
-    })
-
-    newSocket.on('disconnect', () => {
-      console.log('Disconnected from calling server')
-    })
-
     newSocket.on('callInitiated', (data: ActiveCall) => {
-      console.log('Call initiated:', data)
-      setActiveCalls(prev => [...prev, data])
-      setActiveCallSid(data.callSid)
-      setIsCallActive(true)
-      setSuccess(`Call initiated to ${data.to}`)
-      setTimeout(() => setSuccess(null), 5000)
+      if(data.caller.includes(tempUser?.id)) {
+        setActiveCallSid(data.callSid)
+        setIsCallActive(true)
+        setSuccess(`Call initiated to ${data.to}`)
+        setTimeout(() => setSuccess(null), 5000)
+      }
     })
 
     newSocket.on('callStatusUpdate', (data: any) => {
       console.log('Call status update:', data)
-      setActiveCalls(prev => 
-        prev.map(call => 
-          call.callSid === data.callSid 
-            ? { ...call, status: data.status, timestamp: data.timestamp }
-            : call
-        )
-      )
 
       if (['completed', 'failed', 'busy', 'no-answer'].includes(data.status)) {
         if (data.callSid === activeCallSid) {
           setIsCallActive(false)
           setActiveCallSid(undefined)
         }
-        setTimeout(() => {
-          setActiveCalls(prev => prev.filter(call => call.callSid !== data.callSid))
-        }, 10000)
       }
     })
 
-    newSocket.on('outboundCallStatus', (data: any) => {
-      console.log('Outbound call status:', data)
-      setActiveCalls(prev => 
-        prev.map(call => 
-          call.callSid === data.callSid 
-            ? { ...call, status: data.status, timestamp: data.timestamp }
-            : call
-        )
-      )
-    })
 
-    // Listen for incoming calls from Twilio webhooks
     newSocket.on('incomingCall', (data: any) => {
       console.log('🔔 Incoming call received via Socket.IO:', data)
       
@@ -233,10 +203,6 @@ export default function MakeCallPage() {
   const handleError = (errorMessage: string) => {
     setError(errorMessage)
     setTimeout(() => setError(null), 5000)
-  }
-
-  const handleStreamEnd = (callSid: string) => {
-    setActiveCalls(prev => prev.filter(call => call.callSid !== callSid))
   }
 
   const handleAcceptCall = () => {

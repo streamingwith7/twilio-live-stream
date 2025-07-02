@@ -3,10 +3,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { io, Socket } from 'socket.io-client'
 
-// Actual coaching tip interface that matches what the backend sends
 interface CoachingTip {
   id: string;
   tip: string;
+  suggestedScript?: string;
   urgency: 'low' | 'medium' | 'high';
   reasoning: string;
   callSid: string;
@@ -29,13 +29,11 @@ export default function SimpleRealTimeCoaching({
   const [error, setError] = useState<string | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   
-  // Drag and drop state
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Initialize socket connection
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token || !isCallActive) return
@@ -67,7 +65,6 @@ export default function SimpleRealTimeCoaching({
       console.log('🤖 Received coaching tip:', tip)
       
       setCurrentTip(tip)
-      // Reset position when new tip arrives
       setPosition({ x: 0, y: 0 });
       
       const dismissTime = tip.urgency === 'high' ? 45000 : tip.urgency === 'medium' ? 40000 : 30000;
@@ -92,7 +89,6 @@ export default function SimpleRealTimeCoaching({
     }
   }, [callSid, isCallActive])
 
-  // Clear state when call ends
   useEffect(() => {
     if (!isCallActive) {
       setCurrentTip(null)
@@ -101,7 +97,6 @@ export default function SimpleRealTimeCoaching({
     }
   }, [isCallActive])
 
-  // Drag functionality
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!modalRef.current) return;
     
@@ -119,9 +114,8 @@ export default function SimpleRealTimeCoaching({
     const newX = e.clientX - dragOffset.x;
     const newY = e.clientY - dragOffset.y;
     
-    // Constrain to viewport
-    const maxX = window.innerWidth - 500; // Approximate modal width
-    const maxY = window.innerHeight - 300; // Approximate modal height
+    const maxX = window.innerWidth - 500;
+    const maxY = window.innerHeight - 300;
     
     setPosition({
       x: Math.max(-250, Math.min(maxX - 250, newX - window.innerWidth / 2)),
@@ -133,7 +127,6 @@ export default function SimpleRealTimeCoaching({
     setIsDragging(false);
   };
 
-  // Add event listeners for drag
   useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
@@ -164,26 +157,8 @@ export default function SimpleRealTimeCoaching({
     }
   };
 
-  const getUrgencyColor = (urgency: string, isMain = false) => {
-    switch (urgency) {
-      case 'high': 
-        return isMain ? 'bg-red-600 text-white border-red-700' : 'bg-red-50 border-red-200 text-red-800';
-      case 'medium': 
-        return isMain ? 'bg-orange-500 text-white border-orange-600' : 'bg-orange-50 border-orange-200 text-orange-800';
-      case 'low': 
-        return isMain ? 'bg-blue-500 text-white border-blue-600' : 'bg-blue-50 border-blue-200 text-blue-800';
-      default: 
-        return isMain ? 'bg-gray-500 text-white border-gray-600' : 'bg-gray-50 border-gray-200 text-gray-800';
-    }
-  };
-
-  const getUrgencyBadge = (urgency: string) => {
-    switch (urgency) {
-      case 'high': return 'bg-red-600 text-white border-red-600 animate-pulse';
-      case 'medium': return 'bg-orange-500 text-white border-orange-500';
-      case 'low': return 'bg-blue-400 text-white border-blue-400';
-      default: return 'bg-gray-400 text-white border-gray-400';
-    }
+  const getTipStyling = () => {
+    return 'bg-slate-800 text-white border-slate-700';
   };
 
   if (!isCallActive && !currentTip) {
@@ -192,7 +167,6 @@ export default function SimpleRealTimeCoaching({
 
   return (
     <>
-      {/* Main Current Tip - Draggable and Minimal */}
       {currentTip && (
         <div 
           ref={modalRef}
@@ -204,8 +178,7 @@ export default function SimpleRealTimeCoaching({
             cursor: isDragging ? 'grabbing' : 'grab'
           }}
         >
-          <div className={`${getUrgencyColor(currentTip.urgency, true)} rounded-lg shadow-xl border transition-shadow ${isDragging ? 'shadow-2xl' : ''}`}>
-            {/* Minimal Drag Handle */}
+          <div className={`${getTipStyling()} rounded-lg shadow-xl border transition-shadow ${isDragging ? 'shadow-2xl' : ''}`}>
             <div 
               className="flex items-center justify-between px-3 py-2 cursor-grab active:cursor-grabbing"
               onMouseDown={handleMouseDown}
@@ -216,24 +189,27 @@ export default function SimpleRealTimeCoaching({
               </div>
               <button
                 onClick={() => setCurrentTip(null)}
-                className="text-white hover:text-gray-200 text-lg font-bold opacity-75 hover:opacity-100"
+                className="text-white hover:text-gray-300 text-lg font-bold opacity-75 hover:opacity-100"
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 ×
               </button>
             </div>
 
-            {/* Just the tip text */}
             <div className="px-4 pb-4">
-              <p className="text-base font-medium leading-relaxed">
+              <div className="text-base font-medium leading-relaxed whitespace-pre-line opacity-95">
                 {currentTip.tip}
-              </p>
+              </div>
+              {currentTip.suggestedScript && (
+                <div className="mt-3 text-base font-medium leading-relaxed whitespace-pre-line opacity-95">
+                  {currentTip.suggestedScript}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Error display */}
       {error && (
         <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
           <div className="flex items-center space-x-2">
