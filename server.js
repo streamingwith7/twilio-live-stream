@@ -84,17 +84,14 @@ app.prepare().then(() => {
     
     socket.on('joinCallRoom', (callSid) => {
       socket.join(`call_${callSid}`);
-      console.log(`📞 Socket ${socket.id} joined room for call ${callSid}`);
       socket.emit('roomJoined', { room: `call_${callSid}`, type: 'call' });
     });
     
     socket.on('leaveCallRoom', (callSid) => {
       socket.leave(`call_${callSid}`);
-      console.log(`📞 Socket ${socket.id} left room for call ${callSid}`);
       socket.emit('roomLeft', { room: `call_${callSid}`, type: 'call' });
     });
 
-    // Coaching room handlers
     socket.on('joinCoachingRoom', (callSid) => {
       if (!callSid) {
         socket.emit('coachingRoomError', { error: 'CallSid is required' });
@@ -277,7 +274,7 @@ app.prepare().then(() => {
           const deepgram = createClient(process.env.DEEPGRAM_API_KEY);
           
           deepgramConnection = deepgram.listen.live({
-            model: "nova-2",
+            model: "nova-2-phonecall",
             language: "en-US",
             smart_format: true,
             encoding: "mulaw",
@@ -305,7 +302,6 @@ app.prepare().then(() => {
           deepgramConnection.on(LiveTranscriptionEvents.Open, () => {
             console.log(`🎙️ Deepgram connection opened for call ${callSid}`);
             
-            // Only notify specific call room and transcription room, not broadcast
             io.to(`call_${callSid}`).emit('transcriptionReady', { 
               callSid, 
               streamSid,
@@ -321,7 +317,6 @@ app.prepare().then(() => {
           deepgramConnection.on(LiveTranscriptionEvents.Close, () => {
             console.log(`🎙️ Deepgram connection closed for call ${callSid}`);
             
-            // Only notify specific call room and transcription room, not broadcast
             io.to(`call_${callSid}`).emit('transcriptionEnded', { 
               callSid, 
               streamSid,
@@ -353,7 +348,6 @@ app.prepare().then(() => {
                 console.log(`🎙️ Final Transcript [${callSid}]:`, transcript);
               }
               
-              // Only emit to specific call room and transcription room, not broadcast
               io.to(`call_${callSid}`).emit('liveTranscript', transcriptData);
               io.to(`transcription_${callSid}`).emit('liveTranscript', transcriptData);
             }
@@ -366,7 +360,6 @@ app.prepare().then(() => {
             };
             
             console.log(`🎙️ Utterance end for call ${callSid}`);
-            // Only emit to specific call room and transcription room, not broadcast
             io.to(`call_${callSid}`).emit('utteranceEnd', utteranceData);
             io.to(`transcription_${callSid}`).emit('utteranceEnd', utteranceData);
           });
