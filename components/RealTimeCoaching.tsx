@@ -25,7 +25,7 @@ export default function SimpleRealTimeCoaching({
   isCallActive, 
   onError 
 }: SimpleRealTimeCoachingProps) {
-  const [currentTip, setCurrentTip] = useState<CoachingTip | null>(null);
+  const [tips, setTips] = useState<CoachingTip[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
   
@@ -33,6 +33,7 @@ export default function SimpleRealTimeCoaching({
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const modalRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -64,12 +65,21 @@ export default function SimpleRealTimeCoaching({
     newSocket.on('enhancedCoachingTip', (tip: CoachingTip) => {
       console.log('🤖 Received coaching tip:', tip)
       
-      setCurrentTip(tip)
+      setTips(prevTips => {
+        const newTips = [...prevTips, tip];
+        return newTips.slice(-2);
+      });
       setPosition({ x: 0, y: 0 });
       
-      const dismissTime = tip.urgency === 'high' ? 45000 : tip.urgency === 'medium' ? 40000 : 30000;
       setTimeout(() => {
-        setCurrentTip(prevCurrent => prevCurrent?.id === tip.id ? null : prevCurrent)
+        if (scrollRef.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 100);
+      
+      const dismissTime = 70000;
+      setTimeout(() => {
+        setTips(prevTips => prevTips.filter(t => t.id !== tip.id));
       }, dismissTime)
     })
 
@@ -91,7 +101,7 @@ export default function SimpleRealTimeCoaching({
 
   useEffect(() => {
     if (!isCallActive) {
-      setCurrentTip(null)
+      setTips([])
       setError(null)
       setPosition({ x: 0, y: 0 });
     }
@@ -114,11 +124,11 @@ export default function SimpleRealTimeCoaching({
     const newX = e.clientX - dragOffset.x;
     const newY = e.clientY - dragOffset.y;
     
-    const maxX = window.innerWidth - 500;
+    const maxX = window.innerWidth - 600;
     const maxY = window.innerHeight - 300;
     
     setPosition({
-      x: Math.max(-250, Math.min(maxX - 250, newX - window.innerWidth / 2)),
+      x: Math.max(-300, Math.min(maxX - 300, newX - window.innerWidth / 2)),
       y: Math.max(-150, Math.min(maxY - 150, newY - window.innerHeight / 4))
     });
   };
@@ -157,20 +167,25 @@ export default function SimpleRealTimeCoaching({
     }
   };
 
-  const getTipStyling = () => {
-    return 'bg-slate-800 text-white border-slate-700';
+  const getUrgencyColor = (urgency: string) => {
+    switch (urgency) {
+      case 'high': return 'border-red-500 bg-red-900';
+      case 'medium': return 'border-orange-500 bg-orange-900';
+      case 'low': return 'border-blue-500 bg-blue-900';
+      default: return 'border-slate-500 bg-slate-900';
+    }
   };
 
-  if (!isCallActive && !currentTip) {
+  if (!isCallActive && tips.length === 0) {
     return null;
   }
 
   return (
     <>
-      {currentTip && (
+      {tips.length > 0 && (
         <div 
           ref={modalRef}
-          className="fixed z-50 w-full max-w-md mx-4"
+          className="fixed z-50 w-full max-w-2xl mx-4"
           style={{
             top: `calc(25% + ${position.y}px)`,
             left: `calc(50% + ${position.x}px)`,
@@ -178,34 +193,66 @@ export default function SimpleRealTimeCoaching({
             cursor: isDragging ? 'grabbing' : 'grab'
           }}
         >
-          <div className={`${getTipStyling()} rounded-lg shadow-xl border transition-shadow ${isDragging ? 'shadow-2xl' : ''}`}>
-            <div 
-              className="flex items-center justify-between px-3 py-2 cursor-grab active:cursor-grabbing"
-              onMouseDown={handleMouseDown}
-            >
-              <div className="flex items-center space-x-2">
-                <span className="text-lg">{getUrgencyIcon(currentTip.urgency)}</span>
-                <span className="text-sm font-medium opacity-90">AI Coach</span>
-              </div>
-              <button
-                onClick={() => setCurrentTip(null)}
-                className="text-white hover:text-gray-300 text-lg font-bold opacity-75 hover:opacity-100"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="px-4 pb-4">
-              <div className="text-base font-medium leading-relaxed whitespace-pre-line opacity-95">
-                {currentTip.tip}
-              </div>
-              {currentTip.suggestedScript && (
-                <div className="mt-3 text-base font-medium leading-relaxed whitespace-pre-line opacity-95">
-                  {currentTip.suggestedScript}
-                </div>
+          <div 
+            className="flex items-center justify-between px-3 py-2 bg-slate-800 text-white border border-slate-700 rounded-t-lg cursor-grab active:cursor-grabbing"
+            onMouseDown={handleMouseDown}
+          >
+            <div className="flex items-center space-x-2">
+              <span className="text-lg">🤖</span>
+              <span className="text-sm font-medium opacity-90">AI Coach</span>
+              {tips.length > 1 && (
+                <span className="text-xs bg-blue-600 px-2 py-1 rounded-full">
+                  {tips.length} tips
+                </span>
               )}
             </div>
+            <button
+              onClick={() => setTips([])}
+              className="text-white hover:text-gray-300 text-lg font-bold opacity-75 hover:opacity-100"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              ×
+            </button>
+          </div>
+
+                      <div 
+              ref={scrollRef}
+              className="h-[300px] overflow-y-auto bg-slate-800 text-white border-x border-b border-slate-700 rounded-b-lg"
+              style={{ scrollBehavior: 'smooth' }}
+          >
+            {tips.map((tip, index) => (
+              <div key={tip.id} className={`${index > 0 ? 'border-t border-slate-600' : ''}`}>
+                <div className="flex">
+                  
+                  {tip.suggestedScript && (
+                    <div className="flex-1 p-4 border-r border-slate-600">
+                      <div className="text-xs font-semibold text-green-400 mb-2 uppercase tracking-wide flex items-center">
+                        <span className="mr-1">{getUrgencyIcon(tip.urgency)}</span>
+                        💬 Say This
+                      </div>
+                      <div className="text-lg font-xs leading-relaxed text-green-100 whitespace-pre-line">
+                        "{tip.suggestedScript}"
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RIGHT SIDE - Coaching Tip */}
+                  <div className={`${tip.suggestedScript ? 'w-80' : 'flex-1'} p-4`}>
+                    <div className="text-xs font-semibold text-blue-400 mb-2 uppercase tracking-wide flex items-center">
+                      {!tip.suggestedScript && <span className="mr-1">{getUrgencyIcon(tip.urgency)}</span>}
+                      💡 Action
+                    </div>
+                    <div className="text-sm font-xs leading-relaxed text-blue-100 whitespace-pre-line">
+                      {tip.tip}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Urgency Indicator Bar */}
+                <div className={`h-1 ${getUrgencyColor(tip.urgency)}`}></div>
+              </div>
+            ))}
           </div>
         </div>
       )}

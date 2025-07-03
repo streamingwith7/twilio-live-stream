@@ -39,11 +39,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const wsUrl = baseURL.replace('https://', 'wss://').replace('http://', 'ws://')
     
-    const callData = await client.calls(callSid).fetch();
-
-    console.log('callData', callData);
-
-
     const stream = await client.calls(callSid).streams.create({
       url: `${wsUrl}/api/twilio/media-stream`,
       track: 'both_tracks',
@@ -55,24 +50,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       "parameter2.name": 'track_participants',
       "parameter2.value": 'both'
     });
-
-    await client.calls(callSid).update({
-      twiml: `<Response>
-        <Start>
-          <Transcription 
-            statusCallbackUrl="${baseURL}/api/twilio/transcription-webhook"
-            languageCode="en-US"
-            track="both_tracks"
-            partialResults="true"
-            enableAutomaticPunctuation="true"
-            profanityFilter="false"
-          />
-        </Start>
-        <Pause length="3600"/>
-      </Response>`
-    });
-
-    console.log('Started enhanced stream and transcription for call:', callSid);
 
     const callDetails: CallDetails = {
       from: call.from!,

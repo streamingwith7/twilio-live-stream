@@ -42,7 +42,6 @@ class EnhancedOpenAIService {
         context.recentCustomerText || '',
         context.previousTips || []
       );
-
       console.log('coaching tip prompt', prompt);
       console.log('system prompt', SALES_COACHING_PROMPTS.salesCoach);
 
@@ -57,8 +56,6 @@ class EnhancedOpenAIService {
       });
 
       const content = response.choices[0]?.message?.content;
-
-      console.log('coaching tip', content);
 
       if (!content) throw new Error('No response from OpenAI');
       return this.parseJsonResponse(content);

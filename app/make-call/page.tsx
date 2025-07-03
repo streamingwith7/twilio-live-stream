@@ -146,7 +146,6 @@ export default function MakeCallPage() {
     }
   }, [router])
 
-  // Call duration timer for browser calls
   useEffect(() => {
     let interval: NodeJS.Timeout
     

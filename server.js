@@ -63,16 +63,19 @@ app.prepare().then(() => {
   // Make io available globally for webhook routes
   global.io = io;
   io.use((socket, next) => {
+    console.log(socket.handshake.auth);
     const token = socket.handshake.auth.token;
     if (!token) {
       return next(new Error('Authentication error'));
     }
     try {
       const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET || 'fallback-secret');
+      console.log(decoded);
       socket.userId = decoded.userId;
       socket.handshake.auth.identity = decoded.userId;
       next();
     } catch (err) {
+      console.log(err);
       next(new Error('Authentication error'));
     }
   });
@@ -169,7 +172,6 @@ app.prepare().then(() => {
       });
     });
 
-    // Strategy room handlers
     socket.on('joinStrategyRoom', (callSid) => {
       if (!callSid) {
         socket.emit('strategyRoomError', { error: 'CallSid is required' });
