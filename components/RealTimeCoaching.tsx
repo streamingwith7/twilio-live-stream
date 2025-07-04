@@ -67,7 +67,7 @@ export default function SimpleRealTimeCoaching({
       
       setTips(prevTips => {
         const newTips = [...prevTips, tip];
-        return newTips.slice(-2);
+        return newTips;
       });
       setPosition({ x: 0, y: 0 });
       
@@ -76,11 +76,6 @@ export default function SimpleRealTimeCoaching({
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
       }, 100);
-      
-      const dismissTime = 70000;
-      setTimeout(() => {
-        setTips(prevTips => prevTips.filter(t => t.id !== tip.id));
-      }, dismissTime)
     })
 
     newSocket.on('coachingError', (data) => {

@@ -247,7 +247,6 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
         max_tokens: options.max_tokens || 500,
       };
 
-      // Only add additional options that are known to be safe for function calling
       if (options.top_p) requestParams.top_p = options.top_p;
       if (options.frequency_penalty) requestParams.frequency_penalty = options.frequency_penalty;
       if (options.presence_penalty) requestParams.presence_penalty = options.presence_penalty;
@@ -261,11 +260,9 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
 
       const response = await openai.chat.completions.create(requestParams);
 
-      // Convert response format for backward compatibility
       const choice = response.choices[0];
       if (choice?.message?.tool_calls?.[0]) {
         const toolCall = choice.message.tool_calls[0];
-        // Create legacy format for backward compatibility
         choice.message.function_call = {
           name: toolCall.function.name,
           arguments: toolCall.function.arguments
@@ -380,6 +377,8 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
             4. Tip is used only by agent, but customer never use tips.
             5. So tip should be in agent response only. Also tip is generated before user say
             6. Don't change original turns, just update tip usage (isUsed field)
+            7. You should generate fully completed JSON structure, not just a part of it.
+            8. JSON without any other text or comments or markdown
 
             Return ONLY this JSON structure (no markdown, no code blocks):
             {
@@ -397,7 +396,7 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
                 "agent": "agent text if this turn was from agent (omit if customer turn)",
                 "timestamp": "exact timestamp from the original turn data",
               }
-            ]
+              ]
             }
 
             Analyze each agent response AFTER a tip was given to see if they incorporated the tip's guidance. Look for:
