@@ -147,7 +147,7 @@ export default function Dashboard() {
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-gray-900">Phone Numbers & Call Status</h2>
             <p className="mt-2 text-gray-600">Monitor your Twilio phone numbers and real-time call activity</p>
-            <div className="mt-4">
+            <div className="mt-4 flex space-x-4">
               <button
                 onClick={() => router.push('/phone-numbers')}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -157,6 +157,15 @@ export default function Dashboard() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 Manage Phone Numbers
+              </button>
+              <button
+                onClick={() => router.push('/call-reports')}
+                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                View Call Reports
               </button>
             </div>
           </div>

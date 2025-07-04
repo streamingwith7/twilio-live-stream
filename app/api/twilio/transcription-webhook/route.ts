@@ -258,7 +258,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Additional endpoint for manual coaching requests
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const callSid = searchParams.get('callSid');

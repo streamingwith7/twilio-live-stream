@@ -232,3 +232,61 @@ Return your entire response using this exact Markdown format:
 *NO paragraph blocks longer than 2 lines.*
 Use spacing to break each section clearly.
 --- 
+
+
+
+
+
+
+{
+    "id": "cmcoduf500001pfwo53crvvo3",
+    "callSid": "CA5b184a0f617bb2ec2d58350b69837879",
+    "reportData": {
+        "turns": [
+            {
+                "customer": "Hi, I'm interested in learning more about your product.",
+                "timestamp": "2023-10-01T10:00:00Z"
+            },
+            {
+                "tip": {
+                    "isUsed": true,
+                    "content": "Ask open-ended questions to understand the customer's needs.",
+                    "timestamp": "2023-10-01T10:00:30Z"
+                },
+                "agent": "Sure, I’d be happy to help. Can you tell me what specific features you’re looking for?",
+                "timestamp": "2023-10-01T10:01:00Z"
+            },
+            {
+                "customer": "I'm looking for something that can help with project management.",
+                "timestamp": "2023-10-01T10:02:00Z"
+            },
+            {
+                "tip": {
+                    "isUsed": true,
+                    "content": "Highlight the key benefits of the product related to project management.",
+                    "timestamp": "2023-10-01T10:02:30Z"
+                },
+                "agent": "Our product offers a comprehensive project management suite that includes task tracking, team collaboration, and deadline management. How does that sound for your needs?",
+                "timestamp": "2023-10-01T10:03:00Z"
+            },
+            {
+                "customer": "That sounds good. Can you tell me about the pricing?",
+                "timestamp": "2023-10-01T10:04:00Z"
+            },
+            {
+                "tip": {
+                    "isUsed": true,
+                    "content": "Provide a clear breakdown of pricing options.",
+                    "timestamp": "2023-10-01T10:04:30Z"
+                },
+                "agent": "Certainly! We have several pricing tiers depending on the features you need. Our basic plan starts at $10 per month, and our premium plan, which includes all features, is $30 per month. Would you like more details on any specific plan?",
+                "timestamp": "2023-10-01T10:05:00Z"
+            }
+        ]
+    },
+    "totalTurns": 6,
+    "totalTips": 3,
+    "usedTips": 3,
+    "createdAt": "2025-07-04T05:37:20.676Z",
+    "updatedAt": "2025-07-04T05:37:20.676Z"
+}
