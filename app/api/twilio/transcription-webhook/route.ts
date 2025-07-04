@@ -8,6 +8,7 @@ if (!global.callStateTracker) {
     callStartTime: number;
     stage: string;
     isOutboundCall?: boolean;
+    from?: string;
   }>();
 }
 
@@ -36,8 +37,6 @@ export async function POST(request: NextRequest) {
             stage: 'started'
           });
         }
-
-        console.log('started -----------> callSid', callSid);
 
         coachingService.initializeCall(callSid);
 
@@ -155,12 +154,40 @@ export async function POST(request: NextRequest) {
       case 'transcription-stopped':
         console.log('🛑 Enhanced transcription stopped for call:', callSid)
         const report = await coachingService.generateReport(callSid);
-        console.log('report', report);
         const finalSummary = coachingService.generateCallSummary(callSid);
+        const feedback = await coachingService.generateCallFeedback(callSid);
 
         if (report && report.turns) {
           try {
             const { prisma } = require('@/lib/prisma');
+            const twilio = require('twilio');
+            
+            const accountSid = process.env.TWILIO_ACCOUNT_SID;
+            const authToken = process.env.TWILIO_AUTH_TOKEN;
+            const client = twilio(accountSid, authToken);
+            
+            let fromNumber = null;
+            let toNumber = null;
+            let recordingUrl = null;
+            let duration = null;
+            let direction = "";
+            try {
+              const call = await client.calls(callSid).fetch();
+              const callState = global.callStateTracker?.get(callSid);
+              fromNumber = call.from || callState?.from;
+              toNumber = call.to || callState?.to;
+              direction = callState?.isOutboundCall ? 'outbound' : 'inbound';
+              duration = call.duration ? parseInt(call.duration) : null;
+              
+              if (call.recordings) {
+                const recordings = await call.recordings().list();
+                if (recordings.length > 0) {
+                  recordingUrl = recordings[0].uri;
+                }
+              }
+            } catch (twilioError: any) {
+              console.warn('⚠️ Could not fetch call details from Twilio:', twilioError.message);
+            }
             
             const totalTurns = report.turns.length;
             const totalTips = report.turns.filter((turn: any) => turn.tip).length;
@@ -169,10 +196,16 @@ export async function POST(request: NextRequest) {
             await prisma.callReport.create({
               data: {
                 callSid,
+                fromNumber,
+                toNumber,
+                recordingUrl,
+                duration,
                 reportData: report,
                 totalTurns,
                 totalTips,
-                usedTips
+                usedTips,
+                direction,
+                feedback
               }
             });
             

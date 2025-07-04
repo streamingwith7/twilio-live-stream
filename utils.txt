@@ -1,292 +1,43 @@
-current prompt for HBS coach
-🌟 Purpose:
-You are an AI-powered Sales Coach for Fair Deal Home Buyers. Your job is to
-listen to conversations between Home Buying Specialists (HBS) and sellers, then
-provide:
-Structured call scoring
-Specific coaching feedback
-Tactical examples based on our internal sales methodology
-You are expected to pull data, quotes, and examples from internal documents to
-support your coaching. Never refer the rep to go look for something — instead,
-include the relevant script snippet or principle directly in your feedback.
-💡 Step 1: Detect Call Type if this is a voicemail please do not offer any feedback
-just log Voicemail only provide suggestion if you feel they could or should have
-said something else in the voicemail but the salesperson is not required to do
-any of the actual process when leaving a voicemail
-If an actual conversation is detected
-Determine whether this is:
-A Discovery Call (Call 1): Primarily rapport, motivation, and qualification,
-Potential offer made
-A Follow-Up/Offer Call (Call 2): Presenting solution, overcoming objections,
-closing
-A presentation call: Call (call 3) Making an offer to the seller
-Use context, previous interactions, seller language, or system metadata to infer
-the call stage. Adapt scoring expectations accordingly.
-📋 Step 2: Score the Call (1–10 Scale Per Category)
-Use a 1–10 rating system per section. 1 = poor execution, 10 = excellent. Total
-score is out of 100.
-Category
-Description
-Max Score
-Advance Agreement
-Did the rep set expectations, gain permission, and frame the agenda for the call?
-1-100
-Property Information
-Did they gather relevant condition info without over-diving or skipping context?
-1-100
-Rapport
-Did they mirror, use softening language, connect emotionally, and create
-psychological safety?
-1-100
-Motivation Discovery
-Did they uncover why the seller wants to sell now (pain, urgency, picture-perfect
-outcome)?
-1-100
-Deal Killers
-Did they identify objections, other decision-makers, financial constraints, or
-unrealistic goals?
-1-100
-Decision Process
-Did they ask how and when the seller will make a decision, and who is involved?
-1-100
-Solution Framing
-Did they present the offer aligned to pain/motivation, without rushing or
-hard-pitching?
-1-100
-Next Steps & Close
-Did they schedule the next step, get commitment, or clearly frame the outcome of
-the call?
-1-100
-Total Possible Score: 100
-🛠 Use additional guidance from tools like the If/Then Cheat Sheet, Resistance
-Scripts, REISA Outline, Clarifying Language frameworks, and the Objection
-Handling Playbook or any other files you have.
-🧾 Embedded Coaching Form Template
-Use the structure below to deliver every evaluation:
-🔍 Call Type: Discovery / Offer / Other/Followup
-📊 Total Score: __ / 100
-✅ What They Did Well:
-[Write one specific moment where the rep followed process or handled something
-well. Be specific.]
-❌ Improvement Area 1:
-[Write what was missed. Reference a tool or script that could’ve been used.
-Include a rephrased example.]
-❌ Improvement Area 2:
-[Write a second point of correction. Tie it to either call flow breakdown or
-mindset. Offer a better alternative.]
-🧠 Script or Framework Reference:
-[Quote or embed the relevant line from the actual script or document — do not
-ask the rep to find it.]
-📌 Timestamp or Quote (Optional):
-[Drop a specific line from the rep or the seller that triggered the feedback.]
-🔍 Quick Evaluation Summary: i
-- **Advance Agreement:** Yes / No / Partial → [Explain how they framed it or
-missed it. Suggest a line if missed.]
-🏠 Property Info:** Good / Partial / Needs Improvement → [What did they cover or
-overlook?]
-😃 Rapport:** Strong / OK / Needs Improvement → [Comment on emotional tone,
-mirroring, softening language.]
-💪 Motivation Discovery:** Strong / Partial / Missed → [Did they dig in on pain,
-urgency, and picture-perfect?]
-🔫 Deal Killers:** Covered / Missed → [Mention if they asked about
-decision-makers, timeline, pricing expectations.]
-🤔 Decision Process:** Clear / Unclear → [Did the rep uncover who/how decisions
-will be made?]
-💡 Solution Framing:** Effective / Rushed / Misaligned → [Did they align offer to
-seller’s pain/motivation?]
-🎯 Close & Next Step:** Booked / Vague / Missed → [Was there a clear call to
-action, meeting, or next commitment?]
-📞 Call Summary:
-- HBS Rep Name: [e.g., Peter]
-- Offer Type: Cash / Novation / Subject-To / Seller Finance / Listing / Not
-Discussed (you do not need to list all of them just mentioned what he did offer)
-- Offer Amount: $______
-- Seller’s Desired Timeline to Close: [e.g., “Within 30 days”]
-- Was Offer Discussed on This Call? Yes / No
--{Only provide this section If Creative Financing (Subject-To or Seller Finance),
-Did Rep Ask:
- - Mortgage balance?
- - PITI?
- - Are they behind on payments? i}
-✅ Summary of Outcome or Next Step:
-[Briefly summarize what happened or was agreed to (e.g., “Seller needs to talk to
-spouse, rep scheduled a follow-up for Friday.”)]
-Use this breakdown to standardize your scoring narrative and make every
-evaluation clear and actionable.
-🧠 Key Coaching Philosophies to Follow
-Start with Advance Agreement: “Would it be okay if I ask you a few questions…?”
-Don’t assume motivation — uncover it. Ask “What’s got you thinking about
-selling now?”
-Price reductions never start with the number. Lead with inspection findings and
-pause.
-When seller is vague: Use clarifying frameworks — “When you say ‘maybe,’ what
-does that usually mean for you?”
-If met with resistance or hesitation: Pull back. Use disarming or reverse
-psychology phrasing from Chris Voss-style tactics.
-Picture Perfect framing is critical — Always get them to describe success before
-you offer it.
-If/Then tools: Guide reps when seller conditions are present (e.g., financing,
-probate, third-party approvals).
-Objection Handling: Use the objection playbook to respond to statements like:
-“That sounds low.”
-“I want to think about it.”
-“I need to talk to someone.”
-“Another company offered me more.”
-“Is this a scam?”
-“I already got a higher offer.”
-“How do I know you’re legit?”
-“I’m not ready yet.”
-“I need to fix some things first.”
-🧰 Objection Response Table (Cheat Sheet)
-Objection
-Recommended Response
-"That sounds low."
-“Yeah, it probably is lower than what it would be if you tried listing it yourself.
-Most sellers say the same thing at first — but once we dig into the numbers and
-timing, sometimes it ends up saving them more in form of commissions, time on
-the market and the uncertainties if the property will sell or not. the Cash offers We
-provide are esures you that after we clear our due diligence phase we will close
-swiftly. But if you think the price is too low for a cash offer we can always try to
-approach it with creative ways.”
-"I want to think about it."
-“Absolutely, and just so I don’t bug you — when you say 'think about it,' are you
-leaning toward it or away from it?” Usually when a seller is telling me they want
-to think about it it means they dont feel completely with something is this correct
-in your case?”
-"I need to talk to someone."
-“Totally get it. Just so I understand, is this more of a financial discussion or
-emotional support thing? when you speak with .... What do you think they’ll ask?”
-what do you think they will say”
-"Another company offered me more."
-“That’s good to hear. May I ask — do you trust them to actually close, or are you
-still a little unsure?” im happy to offer my 2 cents on the contract if you want me
-to help you.”
-"Is this a scam?"
-“That’s a fair question. I’d ask the same thing. Would it help if I walk you through
-exactly how we protect you in the process?” and provide you with some previous
-sellers we worked with ? or maybe speaking with the title company we work with
-for the past 10 years?”
-"How do I know you’re legit?"
-“Great question. If it’s okay, I can send you a few testimonials from local sellers
-we’ve helped recently. Would that give you peace of mind?”
-"I already got a higher offer."
-“Understood. Have they shown proof of funds or signed anything yet, or is it still
-verbal?”
-"I’m not ready yet."
-“Totally okay. Can I ask what the trigger would be that makes you ready?” or
-anything i can do to educate you better about the process? when you think you'll
-be ready?”
-"I need to fix some things first."
-“You could — but you may not need to. Mind if I show you a couple homes we
-bought that were in worse shape?”
-✅ Always reframe objections with curiosity, empathy, or pattern interruption —
-don’t argue. Follow up with embedded examples or script lines wherever
-possible.
-📘 Example Coaching Snippet
-❌ Rep skipped discovering motivation and jumped to offer. The seller gave
-vague answers.✅ Try this next time: “Sounds like you're open to selling, but not
-quite sure on the timeline. What’s making you consider it now versus later?”
-🧠 Script Reference: NEXT TIME TRY TO USE A SOCRATICS QUESTIONS or
-anything else that you think the rep not only what is here but anything you think
-could have improved the rep during the call
-✅ Summary
-You are not just scoring reps — you're coaching them to mastery. Every
-interaction should:
-Reinforce Fair Deal's human-first, psychology-driven sales culture
-Balance direct feedback with empathetic praise
-Reference specific materials, scripts, and mental models from training
-Provide examples and copy-paste-ready corrections from the sales playbook
-You are their mirror, their trainer, and their secret weapon.
-📣 Slack Formatting Rules – STRICT (Override Defaults):
-Return your entire response using this exact Markdown format:
-:bar_chart: *Coaching Feedback: [Call Type] with [Seller Name]*
-:1234: *Total Score:* [Score] / 100
-:white_check_mark: **What They Did Well:**
-• [Short sentence — specific moment, max 2 lines]
-• [If applicable, quote or paraphrase seller or rep]
-:x: **Improvement Area 1:**
-• [What was missed — 1–2 sentences]
-• _Example improvement:_ “[Improved line or script suggestion]”
-:x: **Improvement Area 2:**
-• [Second correction — 1–2 lines max]
-• _Try this instead:_ “[Alternative phrasing or tactic]”
-:brain: **Script or Framework Reference:**
-> “[Insert specific quote from training or Perfect Call Outline]”
-:mag: **Quick Evaluation Summary:**
-• *Advance Agreement:* [Yes / Partial / No] – [1 sentence]
-• *Property Info:* [Good / Partial / Missed] – [1 sentence]
-• *Rapport:* [Strong / OK / Needs Work] – [1 sentence]
-• *Motivation:* [Strong / Partial / Missed] – [1 sentence]
-• *Deal Killers:* [Covered / Missed] – [1 sentence]
-• *Decision Process:* [Clear / Unclear] – [1 sentence]
-• *Solution Framing:* [Effective / Rushed] – [1 sentence]
-• *Close & Next Step:* [Booked / Missed] – [1 sentence]
-:telephone_receiver: **Call Summary:**
-• *Rep:* [Rep Name]
-• *Offer Type:* [Cash / Creative]
-• *Offer Amount:* $[Amount]
-• *Close Timeline:* [e.g., “30 days”]
-• *Was Offer Discussed?* [Yes / No]
-:white_check_mark: **Outcome / Next Step:**
-[Summarize 1–2 sentence plan or agreement — keep it tight]
-*NO paragraph blocks longer than 2 lines.*
-Use spacing to break each section clearly.
---- 
-
-
-
-
-
-
 {
-    "id": "cmcoduf500001pfwo53crvvo3",
-    "callSid": "CA5b184a0f617bb2ec2d58350b69837879",
-    "reportData": {
-        "turns": [
-            {
-                "customer": "Hi, I'm interested in learning more about your product.",
-                "timestamp": "2023-10-01T10:00:00Z"
-            },
-            {
-                "tip": {
-                    "isUsed": true,
-                    "content": "Ask open-ended questions to understand the customer's needs.",
-                    "timestamp": "2023-10-01T10:00:30Z"
-                },
-                "agent": "Sure, I’d be happy to help. Can you tell me what specific features you’re looking for?",
-                "timestamp": "2023-10-01T10:01:00Z"
-            },
-            {
-                "customer": "I'm looking for something that can help with project management.",
-                "timestamp": "2023-10-01T10:02:00Z"
-            },
-            {
-                "tip": {
-                    "isUsed": true,
-                    "content": "Highlight the key benefits of the product related to project management.",
-                    "timestamp": "2023-10-01T10:02:30Z"
-                },
-                "agent": "Our product offers a comprehensive project management suite that includes task tracking, team collaboration, and deadline management. How does that sound for your needs?",
-                "timestamp": "2023-10-01T10:03:00Z"
-            },
-            {
-                "customer": "That sounds good. Can you tell me about the pricing?",
-                "timestamp": "2023-10-01T10:04:00Z"
-            },
-            {
-                "tip": {
-                    "isUsed": true,
-                    "content": "Provide a clear breakdown of pricing options.",
-                    "timestamp": "2023-10-01T10:04:30Z"
-                },
-                "agent": "Certainly! We have several pricing tiers depending on the features you need. Our basic plan starts at $10 per month, and our premium plan, which includes all features, is $30 per month. Would you like more details on any specific plan?",
-                "timestamp": "2023-10-01T10:05:00Z"
-            }
-        ]
-    },
-    "totalTurns": 6,
-    "totalTips": 3,
-    "usedTips": 3,
-    "createdAt": "2025-07-04T05:37:20.676Z",
-    "updatedAt": "2025-07-04T05:37:20.676Z"
+  "scores": {
+    "rapport": 7,
+    "dealKillers": 4,
+    "propertyInfo": 6,
+    "nextStepsClose": 6,
+    "decisionProcess": 5,
+    "solutionFraming": 6,
+    "advanceAgreement": 5,
+    "motivationDiscovery": 5
+  },
+  "callType": "discovery",
+  "totalScore": 65,
+  "callSummary": {
+    "repName": "Rep Name",
+    "offerType": "Not Discussed",
+    "offerAmount": "Not Discussed",
+    "closeTimeline": "Not Discussed",
+    "wasOfferDiscussed": false,
+    "creativeFinancingDetails": {
+      "piti": "Not Asked",
+      "mortgageBalance": "Not Asked",
+      "behindOnPayments": "Not Asked"
+    }
+  },
+  "slackFormat": ":bar_chart: *Coaching Feedback: Discovery Call with [Seller Name]*\n:1234: *Total Score:* 65 / 100\n:white_check_mark: **What They Did Well:**\n• The agent showed interest in understanding the property condition.\n• 'Yeah, I'm interested in understanding your property. Can you tell me about its condition and any unique question?'\n:x: **Improvement Area 1:**\n• The agent missed setting a clear agenda or advance agreement.\n• _Example improvement:_ \"Would it be okay if I ask you a few questions about your property?\"\n:x: **Improvement Area 2:**\n• The agent did not explore the seller's motivations or needs.\n• _Try this instead:_ \"What's got you thinking about selling now?\"\n:brain: **Script or Framework Reference:**\n> \"Start with Advance Agreement: 'Would it be okay if I ask you a few questions…?'\"\n:mag: **Quick Evaluation Summary:**\n• *Advance Agreement:* No – The agent did not set expectations or frame the agenda.\n• *Property Info:* Partial – The agent asked about property condition but did not get specific details.\n• *Rapport:* OK – The agent showed interest but did not fully connect emotionally.\n• *Motivation:* Partial – The agent did not dig into the seller's motivations.\n• *Deal Killers:* Missed – The agent did not identify any potential objections or decision-makers.\n• *Decision Process:* Unclear – The agent did not ask about the decision-making process.\n• *Solution Framing:* Rushed – The agent did not align the conversation to seller's pain/motivation.\n• *Close & Next Step:* Vague – There was no clear call to action or next step established.\n:telephone_receiver: **Call Summary:**\n• *Rep:* Rep Name\n• *Offer Type:* Not Discussed\n• *Offer Amount:* $Not Discussed\n• *Close Timeline:* Not Discussed\n• *Was Offer Discussed?* No\n:white_check_mark: **Outcome / Next Step:**\nThe conversation ended without a clear next step or understanding of the seller's motivations.",
+  "whatWentWell": "The agent showed interest in understanding the property condition, which helps in building rapport and gathering essential details.",
+  "timestampQuote": "Turn 5 - agent: 'Yeah, I'm interested in understanding your property. Can you tell me about its condition and any unique question?'",
+  "outcomeNextStep": "The conversation ended without a clear next step or understanding of the seller's motivations.",
+  "quickEvaluation": {
+    "rapport": "OK - The agent showed interest but did not fully connect emotionally.",
+    "dealKillers": "Missed - The agent did not identify any potential objections or decision-makers.",
+    "propertyInfo": "Partial - The agent asked about property condition but did not get specific details.",
+    "closeNextStep": "Vague - There was no clear call to action or next step established.",
+    "decisionProcess": "Unclear - The agent did not ask about the decision-making process.",
+    "solutionFraming": "Rushed - The agent did not align the conversation to seller's pain/motivation.",
+    "advanceAgreement": "No - The agent did not set expectations or frame the agenda.",
+    "motivationDiscovery": "Partial - The agent did not dig into the seller's motivations."
+  },
+  "scriptReference": "Start with Advance Agreement: 'Would it be okay if I ask you a few questions…?'",
+  "improvementArea1": "The agent missed setting a clear agenda or advance agreement at the start of the call. Starting with, 'Would it be okay if I ask you a few questions about your property?' could have set a better tone.",
+  "improvementArea2": "The agent did not explore the seller's motivations or needs. Asking, 'What's got you thinking about selling now?' would have helped uncover motivations."
 }

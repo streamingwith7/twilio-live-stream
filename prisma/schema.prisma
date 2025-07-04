@@ -79,12 +79,18 @@ model Stream {
 model CallReport {
   id              String            @id @default(cuid())
   callSid         String            @unique
+  fromNumber      String?           // Phone number that initiated the call
+  toNumber        String?           // Phone number that received the call
+  recordingUrl    String?           // URL to the call recording
+  duration        Int?              // Call duration in seconds
   reportData      Json              // Stores the complete report structure
   totalTurns      Int?              // Total number of turns in conversation
   totalTips       Int?              // Total number of coaching tips generated
   usedTips        Int?              // Number of tips that were actually used
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+  direction       String?           
+  feedback        Json              
 
   @@map("call_reports")
 }

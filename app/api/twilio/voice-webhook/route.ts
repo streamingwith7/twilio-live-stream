@@ -49,7 +49,9 @@ export async function POST(request: NextRequest) {
           global.callStateTracker.set(callSid, {
             callStartTime: Date.now(),
             stage: 'initiated', 
-            isOutboundCall: true
+            isOutboundCall: true,
+            from,
+            to
           });
         console.log('callStateTracker', global.callStateTracker.get(callSid));
         }

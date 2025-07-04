@@ -56,25 +56,30 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
               </Link>
             </div>
             
-            {/* Navigation Links */}
             <div className="hidden md:ml-10 md:flex md:space-x-8">
               {navItems.map((item) => {
                 const isActive = pathname === item.href
                 return (
-                  <Link
+                  <div
                     key={item.name}
-                    href={item.href}
-                    className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'text-blue-600 border-b-2 border-blue-600'
-                        : 'text-gray-500 hover:text-gray-700'
+                    className={`relative h-16 flex items-center ${
+                      isActive ? 'border-b-2 border-blue-600' : ''
                     }`}
                   >
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {getIcon(item.icon)}
-                    </svg>
-                    {item.name}
-                  </Link>
+                    <Link
+                      href={item.href}
+                      className={`inline-flex items-center px-1 pt-1 text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'text-blue-600'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        {getIcon(item.icon)}
+                      </svg>
+                      {item.name}
+                    </Link>
+                  </div>
                 )
               })}
             </div>

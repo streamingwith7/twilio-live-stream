@@ -8,5 +8,7 @@ declare global {
     callStartTime: number;
     stage: string;
     isOutboundCall?: boolean;
+    from?: string;
+    to?: string;
   }> | undefined
 } 

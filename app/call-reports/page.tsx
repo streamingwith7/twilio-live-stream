@@ -9,11 +9,16 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 interface CallReport {
   id: string
   callSid: string
+  fromNumber?: string
+  toNumber?: string
+  recordingUrl?: string
+  duration?: number
   totalTurns: number
   totalTips: number
   usedTips: number
   createdAt: string
   updatedAt: string
+  direction: string
 }
 
 interface PaginationData {
@@ -79,6 +84,12 @@ export default function CallReportsPage() {
     })
   }
 
+  const formatDuration = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
   }
@@ -113,17 +124,17 @@ export default function CallReportsPage() {
         <div className="px-4 py-6 sm:px-0">
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-gray-900">Call Reports</h2>
-            <p className="mt-2 text-gray-600">AI Coaching Analysis Reports</p>
-            <p className="mt-1 text-sm text-gray-500">Detailed analysis of AI real-time coaching tips and their effectiveness</p>
+            <p className="mt-2 text-gray-600">Call History and Details</p>
+            <p className="mt-1 text-sm text-gray-500">View call information including phone numbers, duration, and timestamps</p>
           </div>
 
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
             <div className="px-4 py-5 sm:px-6">
               <h3 className="text-lg leading-6 font-medium text-gray-900">
-                AI Coaching Analysis Reports
+                Call History
               </h3>
               <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                Monitor the effectiveness of AI coaching tips across all calls
+                View all call records with phone numbers, duration, and timestamps
               </p>
             </div>
 
@@ -132,22 +143,19 @@ export default function CallReportsPage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Call SID
+                      From Number
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Date
+                      To Number
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Turns
+                      Direction
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total Tips
+                      Duration
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Used Tips
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Usage Rate
+                      Date & Time
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -158,27 +166,19 @@ export default function CallReportsPage() {
                   {reports.map((report) => (
                     <tr key={report.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {report.callSid}
+                        {report.fromNumber || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {report.toNumber || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {report.direction || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {report.duration ? formatDuration(report.duration) : 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(report.createdAt)} • {formatTime(report.createdAt)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {report.totalTurns || 0}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {report.totalTips || 0}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {report.usedTips || 0}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <span className={getUsageRateColor(report.usedTips || 0, report.totalTips || 1)}>
-                          {report.totalTips && report.usedTips 
-                            ? `${Math.round((report.usedTips / report.totalTips) * 100)}%`
-                            : '0%'
-                          }
-                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button

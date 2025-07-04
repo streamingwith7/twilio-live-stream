@@ -280,6 +280,61 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
     }
   }
 
+  async generateCallFeedback(context: {
+    conversationHistory: any[];
+    fullConversation: string;
+    analytics: any;
+    tipHistory: any[];
+  }): Promise<any> {
+    try {
+      const { conversationHistory, fullConversation, analytics, tipHistory } = context;
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { 
+            role: "system", 
+            content: SALES_COACHING_PROMPTS.callFeedback 
+          },
+          { 
+            role: "user", 
+            content: `Analyze this complete sales conversation and provide comprehensive call feedback:
+
+            FULL CONVERSATION:
+            ${fullConversation}
+
+            CONVERSATION ANALYTICS:
+            ${JSON.stringify(analytics, null, 2)}
+
+            COACHING TIPS GIVEN:
+            ${tipHistory.map((tip, index) => `Tip ${index + 1}: ${tip.tip} [${tip.urgency}] - ${tip.reasoning}`).join('\n')}
+
+            CONVERSATION SUMMARY:
+            - Total Turns: ${conversationHistory.length}
+            - Agent Turns: ${conversationHistory.filter(t => t.speaker === 'agent').length}
+            - Customer Turns: ${conversationHistory.filter(t => t.speaker === 'customer').length}
+            - Call Duration: ${Math.round((analytics?.conversationSummary?.duration || 0) / 60000)} minutes
+            - Tips Generated: ${tipHistory.length}
+            - Tips Used: ${tipHistory.filter(tip => tip.isUsed).length}
+
+            Provide comprehensive call feedback following the exact JSON format specified in the system prompt.`
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) return null;
+      
+      return this.parseJsonResponse(content);
+    } catch (error) {
+      console.error('Error generating call feedback:', error);
+      return null;
+    }
+  }
+
   async generateDetailedCallReport(conversationTurns: any[], tipHistory: any[]): Promise<any> {
     try {
 

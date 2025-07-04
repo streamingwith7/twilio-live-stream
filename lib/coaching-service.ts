@@ -428,6 +428,127 @@ class EnhancedCoachingService {
     
     return null;
   }
+
+  async generateCallFeedback(callSid: string): Promise<any> {
+    const conversation = this.tracker.getConversation(callSid);
+    if (!conversation) {
+      console.log('No conversation found for feedback generation:', callSid);
+      return null;
+    }
+
+    const { turns, analytics, tipHistory } = conversation;
+    
+    const fullConversation = turns
+      .map((turn: ConversationTurn, index: number) => {
+        const turnNumber = index + 1;
+        const sentiment = turn.sentiment ? ` [${turn.sentiment}]` : '';
+        const intent = turn.intent ? ` [${turn.intent}]` : '';
+        return `Turn ${turnNumber} - ${turn.speaker}${sentiment}${intent}: "${turn.text}"`;
+      })
+      .join('\n');
+
+    const conversationSummary = {
+      totalTurns: turns.length,
+      agentTurns: turns.filter((t: ConversationTurn) => t.speaker === 'agent').length,
+      customerTurns: turns.filter((t: ConversationTurn) => t.speaker === 'customer').length,
+      duration: Date.now() - conversation.callStartTime,
+      previousTipCount: tipHistory?.length || 0
+    };
+
+    try {
+      const feedbackData = await openaiService.generateCallFeedback({
+        conversationHistory: turns,
+        fullConversation,
+        analytics: {
+          ...analytics,
+          conversationSummary
+        },
+        tipHistory: tipHistory || []
+      });
+
+      return feedbackData;
+    } catch (error) {
+      console.error('Error generating call feedback:', error);
+      return null;
+    }
+  }
+
+  async saveCallFeedbackToDatabase(callSid: string, feedbackData: any): Promise<boolean> {
+    try {
+      const { PrismaClient } = require('@prisma/client');
+      const prisma = new PrismaClient();
+
+      // Check if call report already exists
+      const existingReport = await prisma.callReport.findUnique({
+        where: { callSid }
+      });
+
+      if (existingReport) {
+        // Update existing report with feedback
+        await prisma.callReport.update({
+          where: { callSid },
+          data: {
+            reportData: {
+              ...existingReport.reportData,
+              feedback: feedbackData
+            },
+            updatedAt: new Date()
+          }
+        });
+      } else {
+        // Create new report with feedback
+        await prisma.callReport.create({
+          data: {
+            callSid,
+            reportData: {
+              feedback: feedbackData
+            },
+            totalTurns: feedbackData?.callSummary?.totalTurns || 0,
+            totalTips: feedbackData?.tipHistory?.length || 0,
+            usedTips: feedbackData?.tipHistory?.filter((tip: any) => tip.isUsed).length || 0
+          }
+        });
+      }
+
+      await prisma.$disconnect();
+      console.log('✅ Call feedback saved to database for callSid:', callSid);
+      return true;
+    } catch (error) {
+      console.error('❌ Error saving call feedback to database:', error);
+      return false;
+    }
+  }
+
+  async endCallWithFeedback(callSid: string): Promise<any> {
+    try {
+      console.log('🔄 Generating call feedback for callSid:', callSid);
+      
+      // Generate feedback
+      const feedbackData = await this.generateCallFeedback(callSid);
+      
+      if (feedbackData) {
+        // Save to database
+        const saved = await this.saveCallFeedbackToDatabase(callSid, feedbackData);
+        
+        if (saved) {
+          console.log('✅ Call feedback generated and saved successfully for callSid:', callSid);
+        } else {
+          console.log('⚠️ Call feedback generated but failed to save for callSid:', callSid);
+        }
+      } else {
+        console.log('⚠️ No feedback data generated for callSid:', callSid);
+      }
+
+      // End the call in tracker
+      this.tracker.endCall(callSid);
+      
+      return feedbackData;
+    } catch (error) {
+      console.error('❌ Error in endCallWithFeedback:', error);
+      this.tracker.endCall(callSid);
+      return null;
+    }
+  }
   
   async processTranscript(
     callSid: string,
