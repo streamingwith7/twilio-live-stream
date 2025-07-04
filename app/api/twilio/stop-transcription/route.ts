@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
 
     const client = twilio(accountSid, authToken)
 
-    // Check if call is active
     const call = await client.calls(callSid).fetch()
     if (call.status !== 'in-progress') {
       return NextResponse.json(
@@ -33,7 +32,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Stop transcription using TwiML
     const updatedCall = await client.calls(callSid).update({
       twiml: `<Response>
         <Stop>
@@ -45,14 +43,12 @@ export async function POST(request: NextRequest) {
 
     console.log('Stopped transcription for call:', callSid)
 
-    // Broadcast to connected clients
     if (global.io) {
       global.io.emit('transcriptionStopped', {
         callSid,
         timestamp: new Date().toISOString()
       })
 
-      // Emit to specific call room
       global.io.to(`call_${callSid}`).emit('transcriptionStopped', {
         callSid,
         timestamp: new Date().toISOString()

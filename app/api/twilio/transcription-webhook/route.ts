@@ -37,6 +37,10 @@ export async function POST(request: NextRequest) {
           });
         }
 
+        console.log('started -----------> callSid', callSid);
+
+        coachingService.initializeCall(callSid);
+
         if (global.io) {
           global.io.to(`transcription_${callSid}`).emit('transcriptionStarted', {
             callSid,
@@ -150,8 +154,33 @@ export async function POST(request: NextRequest) {
 
       case 'transcription-stopped':
         console.log('🛑 Enhanced transcription stopped for call:', callSid)
-
+        const report = await coachingService.generateReport(callSid);
+        console.log('report', report);
         const finalSummary = coachingService.generateCallSummary(callSid);
+
+        if (report && report.turns) {
+          try {
+            const { prisma } = require('@/lib/prisma');
+            
+            const totalTurns = report.turns.length;
+            const totalTips = report.turns.filter((turn: any) => turn.tip).length;
+            const usedTips = report.turns.filter((turn: any) => turn.tip && turn.tip.isUsed).length;
+            
+            await prisma.callReport.create({
+              data: {
+                callSid,
+                reportData: report,
+                totalTurns,
+                totalTips,
+                usedTips
+              }
+            });
+            
+            console.log('✅ Call report saved to database for call:', callSid);
+          } catch (error) {
+            console.error('❌ Error saving call report to database:', error);
+          }
+        }
 
         if (global.io) {
           global.io.to(`transcription_${callSid}`).emit('transcriptionStopped', {
@@ -161,7 +190,6 @@ export async function POST(request: NextRequest) {
             enhanced: true
           });
 
-          // Emit final coaching summary
           global.io.to(`coaching_${callSid}`).emit('finalCoachingSummary', {
             callSid,
             summary: finalSummary,

@@ -35,9 +35,7 @@ export async function POST(request: NextRequest) {
       <Response>`
 
     if (isOutboundBrowserCall) {
-      // Handle outbound browser call failures
       if (dialCallStatus === 'completed') {
-        // Call was successful, no additional message needed
         twiml += `<Hangup />`
       } else if (dialCallStatus === 'busy') {
         twiml += `

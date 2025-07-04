@@ -9,18 +9,31 @@ interface ConversationTurn {
   confidence?: number;
 }
 
+interface CallReport {
+  turns: TurnWithTip[];
+}
+
+interface TurnWithTip {
+  customer?: string;
+  agent?: string;
+  tip?: {
+    content: string;
+    isUsed: boolean;
+    timestamp: string;
+  }
+}
+
 interface CallAnalytics {
   conversationStage: 'opening' | 'discovery' | 'presentation' | 'objection' | 'closing';
   customerSentiment: 'positive' | 'negative' | 'neutral';
-  agentPerformance: number; // 0-100 score
-  talkRatio: { agent: number; customer: number }; // percentage
+  agentPerformance: number;
+  talkRatio: { agent: number; customer: number };
   keyMoments: string[];
   detectedIntents: string[];
   riskFactors: string[];
   opportunities: string[];
 }
 
-// Simplified coaching tip interface
 interface SimpleCoachingTip {
   id: string;
   tip: string;
@@ -45,6 +58,7 @@ class EnhancedConversationTracker {
   }>();
 
   initializeCall(callSid: string, customerData?: any) {
+    console.log('🚀 initializeCall: Initializing conversation for callSid:', callSid);
     this.conversations.set(callSid, {
       turns: [],
       analytics: {
@@ -64,6 +78,7 @@ class EnhancedConversationTracker {
       lastSpeaker: undefined,
       customerJustFinishedSpeaking: false
     });
+    console.log('✅ initializeCall: Successfully initialized conversation for callSid:', callSid);
   }
 
   addTranscript(callSid: string, speaker: 'agent' | 'customer', text: string, timestamp: string) {
@@ -72,8 +87,7 @@ class EnhancedConversationTracker {
 
     const wasCustomerSpeaking = conversation.lastSpeaker === 'customer';
     const isCustomerSpeaking = speaker === 'customer';
-    console.log('lastSpeaker', conversation.lastSpeaker);
-    console.log('speaker', speaker);
+    console.log(speaker, '--------------->', text);
     conversation.customerJustFinishedSpeaking = (wasCustomerSpeaking && !isCustomerSpeaking) || 
                                                  (conversation.lastSpeaker === undefined && !isCustomerSpeaking && conversation.turns.some(t => t.speaker === 'customer'));
     conversation.lastSpeaker = speaker;
@@ -93,11 +107,11 @@ class EnhancedConversationTracker {
 
   private analyzeSentiment(text: string): 'positive' | 'negative' | 'neutral' {
     const positiveWords = ['great', 'excellent', 'perfect', 'love', 'amazing', 'fantastic', 'wonderful', 'interested', 'yes', 'absolutely',
-                          'dream home', 'beautiful', 'spacious', 'move forward', 'ready to buy', 'ready to list', 'exactly what', 'impressed',
-                          'good value', 'fair price', 'reasonable', 'motivated', 'excited', 'sounds good'];
-    const negativeWords = ['terrible', 'awful', 'hate', 'no', 'never', 'problem', 'issue', 'concerned', 'worried', 'expensive',
-                          'overpriced', 'too small', 'needs work', 'bad location', 'not interested', 'disappointing', 'commission too high',
-                          'fees too much', 'cant afford', 'bad market', 'unrealistic', 'not worth it'];
+                          'fair offer', 'good price', 'reasonable', 'motivated', 'excited', 'sounds good', 'looking forward',
+                          'need to sell', 'ready to sell', 'cash offer', 'quick sale', 'no hassle', 'convenient'];
+    const negativeWords = ['terrible', 'awful', 'hate', 'no', 'never', 'problem', 'issue', 'concerned', 'worried', 'lowball',
+                          'too low', 'not enough', 'bad offer', 'not interested', 'disappointing', 'insulting',
+                          'market value', 'worth more', 'unrealistic', 'not worth it', 'other offers'];
     
     const words = text.toLowerCase().split(' ');
     let positiveScore = 0;
@@ -117,65 +131,57 @@ class EnhancedConversationTracker {
     const lowerText = text.toLowerCase();
     
     if (speaker === 'customer') {
-      // Real estate specific customer intents (BUYER & SELLER)
-      if (lowerText.includes('price') || lowerText.includes('cost') || lowerText.includes('expensive') || lowerText.includes('budget')) {
+      if (lowerText.includes('how much') || lowerText.includes('what price') || lowerText.includes('offer') || lowerText.includes('worth')) {
         return 'price_inquiry';
       }
-      if (lowerText.includes('commission') || lowerText.includes('fees') || lowerText.includes('what do you charge')) {
-        return 'commission_inquiry';
+      if (lowerText.includes('why should i sell') || lowerText.includes('not interested') || lowerText.includes('not selling') || lowerText.includes('happy here')) {
+        return 'not_motivated';
       }
-      if (lowerText.includes('location') || lowerText.includes('neighborhood') || lowerText.includes('area') || lowerText.includes('schools')) {
-        return 'location_inquiry';
-      }
-      if (lowerText.includes('bedrooms') || lowerText.includes('bathrooms') || lowerText.includes('square feet') || lowerText.includes('garage')) {
-        return 'property_features';
-      }
-      if (lowerText.includes('market value') || lowerText.includes('what is it worth') || lowerText.includes('comps') || lowerText.includes('comparable')) {
-        return 'property_valuation';
-      }
-      if (lowerText.includes('think about') || lowerText.includes('consider') || lowerText.includes('decide later') || lowerText.includes('sleep on it')) {
+      if (lowerText.includes('need to think') || lowerText.includes('consider') || lowerText.includes('decide later') || lowerText.includes('discuss with')) {
         return 'hesitation';
       }
-      if (lowerText.includes('not interested') || lowerText.includes('not right now') || lowerText.includes('looking elsewhere')) {
-        return 'rejection';
+      if (lowerText.includes('other offers') || lowerText.includes('other buyers') || lowerText.includes('realtor') || lowerText.includes('agent')) {
+        return 'competition_mentioned';
       }
-      if (lowerText.includes('when can we see') || lowerText.includes('schedule a showing') || lowerText.includes('viewing')) {
-        return 'showing_request';
+      if (lowerText.includes('repairs') || lowerText.includes('condition') || lowerText.includes('as-is') || lowerText.includes('fix')) {
+        return 'property_condition';
       }
-      if (lowerText.includes('list my house') || lowerText.includes('sell my home') || lowerText.includes('listing agreement')) {
-        return 'listing_request';
+      if (lowerText.includes('quick sale') || lowerText.includes('need to sell') || lowerText.includes('urgent') || lowerText.includes('fast')) {
+        return 'urgency_expressed';
       }
-      if (lowerText.includes('mortgage') || lowerText.includes('financing') || lowerText.includes('pre-approved') || lowerText.includes('loan')) {
-        return 'financing_inquiry';
+      if (lowerText.includes('cash') || lowerText.includes('financing') || lowerText.includes('mortgage') || lowerText.includes('closing')) {
+        return 'transaction_terms';
       }
-      if (lowerText.includes('staging') || lowerText.includes('prepare house') || lowerText.includes('improvements') || lowerText.includes('repairs')) {
-        return 'property_preparation';
+      if (lowerText.includes('moving') || lowerText.includes('relocating') || lowerText.includes('downsizing') || lowerText.includes('upsizing')) {
+        return 'lifestyle_change';
       }
-      if (lowerText.includes('yes') || lowerText.includes('sounds good') || lowerText.includes('interested')) {
+      if (lowerText.includes('inherited') || lowerText.includes('estate') || lowerText.includes('divorce') || lowerText.includes('foreclosure')) {
+        return 'distressed_situation';
+      }
+      if (lowerText.includes('yes') || lowerText.includes('sounds good') || lowerText.includes('interested') || lowerText.includes('tell me more')) {
         return 'positive_engagement';
       }
     } else {
-      // Real estate specific agent intents (BUYER & SELLER scenarios)
-      if (lowerText.includes('tell me about') || lowerText.includes('what are you looking for') || lowerText.includes('budget') || lowerText.includes('why are you selling')) {
+      if (lowerText.includes('tell me about') || lowerText.includes('why selling') || lowerText.includes('situation') || lowerText.includes('circumstances')) {
         return 'discovery_question';
       }
       if (lowerText.includes('i understand') || lowerText.includes('that makes sense') || lowerText.includes('i hear you')) {
         return 'empathy';
       }
-      if (lowerText.includes('would you like to see') || lowerText.includes('shall we schedule') || lowerText.includes('viewing')) {
-        return 'closing_attempt';
+      if (lowerText.includes('cash offer') || lowerText.includes('can offer') || lowerText.includes('willing to pay')) {
+        return 'making_offer';
       }
-      if (lowerText.includes('ready to list') || lowerText.includes('sign the listing') || lowerText.includes('move forward with listing')) {
-        return 'listing_close';
+      if (lowerText.includes('buy as-is') || lowerText.includes('no repairs needed') || lowerText.includes('any condition')) {
+        return 'as_is_benefit';
       }
-      if (lowerText.includes('this property has') || lowerText.includes('features include') || lowerText.includes('neighborhood offers')) {
-        return 'property_presentation';
+      if (lowerText.includes('close quickly') || lowerText.includes('fast closing') || lowerText.includes('days not months')) {
+        return 'speed_benefit';
       }
-      if (lowerText.includes('market analysis') || lowerText.includes('comparable sales') || lowerText.includes('pricing strategy') || lowerText.includes('market value')) {
-        return 'market_analysis';
+      if (lowerText.includes('no fees') || lowerText.includes('no commission') || lowerText.includes('no realtor fees')) {
+        return 'cost_savings';
       }
-      if (lowerText.includes('my marketing plan') || lowerText.includes('how i sell homes') || lowerText.includes('my strategy')) {
-        return 'value_proposition';
+      if (lowerText.includes('help you') || lowerText.includes('solve your problem') || lowerText.includes('make it easy')) {
+        return 'problem_solving';
       }
     }
     
@@ -183,7 +189,6 @@ class EnhancedConversationTracker {
   }
 
   private calculateConfidence(text: string): number {
-    // Simple confidence calculation based on text length and completeness
     const wordCount = text.split(' ').length;
     if (wordCount < 3) return 0.6;
     if (wordCount < 8) return 0.8;
@@ -196,7 +201,6 @@ class EnhancedConversationTracker {
 
     const { analytics, turns } = conversation;
     
-    // Update talk ratio
     const agentTurns = turns.filter(t => t.speaker === 'agent').length;
     const customerTurns = turns.filter(t => t.speaker === 'customer').length;
     const total = agentTurns + customerTurns;
@@ -206,20 +210,16 @@ class EnhancedConversationTracker {
       customer: total > 0 ? (customerTurns / total) * 100 : 0
     };
 
-    // Update conversation stage
     analytics.conversationStage = this.determineConversationStage(turns);
     
-    // Update customer sentiment
     const recentCustomerTurns = turns.filter(t => t.speaker === 'customer').slice(-3);
     if (recentCustomerTurns.length > 0) {
       const sentiments = recentCustomerTurns.map(t => t.sentiment);
       analytics.customerSentiment = this.calculateOverallSentiment(sentiments);
     }
 
-    // Detect risk factors
     this.detectRiskFactors(analytics, turn);
     
-    // Detect opportunities
     this.detectOpportunities(analytics, turn);
   }
 
@@ -227,21 +227,20 @@ class EnhancedConversationTracker {
     const recentTurns = turns.slice(-5);
     const recentText = recentTurns.map(t => t.text.toLowerCase()).join(' ');
     
-    // Real estate specific stage detection (BUYER & SELLER)
-    if (recentText.includes('price') || recentText.includes('too expensive') || recentText.includes('budget') || recentText.includes('cant afford') || 
-        recentText.includes('commission') || recentText.includes('fees') || recentText.includes('too high')) {
+    if (recentText.includes('too low') || recentText.includes('not enough') || recentText.includes('worth more') || recentText.includes('market value') || 
+        recentText.includes('other offers') || recentText.includes('not interested') || recentText.includes('lowball')) {
       return 'objection';
     }
-    if (recentText.includes('schedule') || recentText.includes('showing') || recentText.includes('when can we see') || recentText.includes('viewing') || recentText.includes('offer') ||
-        recentText.includes('list my house') || recentText.includes('listing agreement') || recentText.includes('ready to list') || recentText.includes('sign')) {
+    if (recentText.includes('make an offer') || recentText.includes('cash offer') || recentText.includes('willing to sell') || 
+        recentText.includes('move forward') || recentText.includes('accept') || recentText.includes('deal')) {
       return 'closing';
     }
-    if (recentText.includes('property has') || recentText.includes('neighborhood') || recentText.includes('features') || recentText.includes('bedrooms') || recentText.includes('square feet') ||
-        recentText.includes('market analysis') || recentText.includes('comparable') || recentText.includes('marketing plan') || recentText.includes('strategy')) {
+    if (recentText.includes('we buy') || recentText.includes('cash offer') || recentText.includes('as-is') || recentText.includes('fast closing') || 
+        recentText.includes('no fees') || recentText.includes('no repairs') || recentText.includes('benefits')) {
       return 'presentation';
     }
-    if (recentText.includes('looking for') || recentText.includes('budget') || recentText.includes('what are you') || recentText.includes('tell me about') ||
-        recentText.includes('why selling') || recentText.includes('motivation') || recentText.includes('timeline')) {
+    if (recentText.includes('why selling') || recentText.includes('situation') || recentText.includes('circumstances') || recentText.includes('tell me about') ||
+        recentText.includes('motivation') || recentText.includes('timeline') || recentText.includes('condition')) {
       return 'discovery';
     }
     
@@ -261,53 +260,50 @@ class EnhancedConversationTracker {
   private detectRiskFactors(analytics: CallAnalytics, turn: ConversationTurn) {
     const text = turn.text.toLowerCase();
     
-    // Customer disengagement
     if (turn.speaker === 'customer' && text.length < 10 && analytics.customerSentiment === 'negative') {
-      analytics.riskFactors.push('Customer seems disengaged');
+      analytics.riskFactors.push('Seller seems disengaged');
     }
     
-    // Real estate price objections (BUYER & SELLER)
-    if (text.includes('expensive') || text.includes('too much') || text.includes('out of budget') || text.includes('cant afford')) {
-      analytics.riskFactors.push('Price objection detected');
+    if (text.includes('too low') || text.includes('not enough') || text.includes('lowball') || text.includes('insulting') ||
+        text.includes('worth more') || text.includes('market value') || text.includes('asking more')) {
+      analytics.riskFactors.push('Seller thinks offer too low');
     }
     
-    // Commission/fee objections (SELLER)
-    if (text.includes('commission too high') || text.includes('fees too much') || text.includes('reduce commission') || text.includes('discount fees')) {
-      analytics.riskFactors.push('Commission objection detected');
+    if (text.includes('not interested') || text.includes('not selling') || text.includes('happy here') || text.includes('no need') ||
+        text.includes('not motivated') || text.includes('change my mind')) {
+      analytics.riskFactors.push('Seller not motivated to sell');
     }
     
-    // Location concerns (BUYER)
-    if (text.includes('location') && (text.includes('not') || text.includes('wrong') || text.includes('bad'))) {
-      analytics.riskFactors.push('Location concerns expressed');
+    if (text.includes('other offers') || text.includes('other buyers') || text.includes('realtor') || text.includes('agent') ||
+        text.includes('listing') || text.includes('multiple offers') || text.includes('better offer')) {
+      analytics.riskFactors.push('Competition from other buyers');
     }
     
-    // Property condition concerns (BUYER & SELLER)
-    if (text.includes('needs work') || text.includes('repairs') || text.includes('outdated') || text.includes('condition')) {
-      analytics.riskFactors.push('Property condition concerns');
+    if (text.includes('zillow says') || text.includes('neighbor sold') || text.includes('should be worth') || 
+        text.includes('appraisal says') || text.includes('assessed value')) {
+      analytics.riskFactors.push('Unrealistic price expectations');
     }
     
-    // Market timing concerns (SELLER)
-    if (text.includes('bad time to sell') || text.includes('market is down') || text.includes('wait for better market')) {
-      analytics.riskFactors.push('Market timing concerns');
+    if (text.includes('no rush') || text.includes('not urgent') || text.includes('take my time') || text.includes('think about it') ||
+        text.includes('no hurry') || text.includes('maybe later')) {
+      analytics.riskFactors.push('No urgency to sell');
     }
     
-    // Pricing expectations too high (SELLER)
-    if (text.includes('neighbor sold for more') || text.includes('zillow says') || text.includes('should be worth more')) {
-      analytics.riskFactors.push('Unrealistic pricing expectations');
+    if (text.includes('family home') || text.includes('sentimental') || text.includes('memories') || text.includes('grew up here') ||
+        text.includes('hard to leave') || text.includes('emotional')) {
+      analytics.riskFactors.push('Strong emotional attachment');
     }
     
-    // Other agents/properties mentioned (BUYER & SELLER)
-    if (text.includes('other agent') || text.includes('other property') || text.includes('looking at others') || text.includes('shopping around') ||
-        text.includes('interviewing agents') || text.includes('other realtor')) {
-      analytics.riskFactors.push('Considering other options');
+    if (text.includes('spouse disagrees') || text.includes('family not sure') || text.includes('partner thinks') ||
+        text.includes('need to discuss') || text.includes('not on same page')) {
+      analytics.riskFactors.push('Family disagreement detected');
     }
     
-    // Timeline issues (BUYER & SELLER)
-    if (text.includes('no rush') || text.includes('not urgent') || text.includes('take our time') || text.includes('no hurry to sell')) {
-      analytics.riskFactors.push('No urgency expressed');
+    if (text.includes('try realtor first') || text.includes('list it first') || text.includes('see what market') ||
+        text.includes('traditional sale') || text.includes('mls') || text.includes('open house')) {
+      analytics.riskFactors.push('Wants to try traditional sale');
     }
     
-    // Agent talking too much
     if (analytics.talkRatio.agent > 70) {
       analytics.riskFactors.push('Agent dominating conversation');
     }
@@ -316,68 +312,73 @@ class EnhancedConversationTracker {
   private detectOpportunities(analytics: CallAnalytics, turn: ConversationTurn) {
     const text = turn.text.toLowerCase();
     
-    // Positive engagement
     if (turn.speaker === 'customer' && turn.sentiment === 'positive') {
-      analytics.opportunities.push('Customer showing positive interest');
+      analytics.opportunities.push('Seller showing positive interest');
     }
     
-    // Real estate specific opportunities (BUYER & SELLER)
-    if (text.includes('love') || text.includes('perfect') || text.includes('exactly what') || text.includes('dream home')) {
-      analytics.opportunities.push('Strong emotional connection to property');
-    }
-    
-    // Urgency indicators (BUYER & SELLER)
-    if (text.includes('need to move') || text.includes('lease expires') || text.includes('closing soon') || text.includes('time sensitive') ||
-        text.includes('need to sell quickly') || text.includes('already bought') || text.includes('job relocation')) {
-      analytics.opportunities.push('Time urgency expressed');
-    }
-    
-    // Financial readiness (BUYER)
-    if (text.includes('pre-approved') || text.includes('cash buyer') || text.includes('financing ready') || text.includes('qualified')) {
-      analytics.opportunities.push('Financial qualification confirmed');
-    }
-    
-    // Motivated seller indicators (SELLER)
-    if (text.includes('need to sell') || text.includes('must sell') || text.includes('divorce') || text.includes('estate sale') || 
-        text.includes('financial hardship') || text.includes('foreclosure')) {
+    if (text.includes('need to sell') || text.includes('must sell') || text.includes('urgent') || text.includes('quick sale') ||
+        text.includes('asap') || text.includes('right away') || text.includes('time sensitive')) {
       analytics.opportunities.push('Highly motivated seller');
     }
     
-    // Property preparation willingness (SELLER)
-    if (text.includes('willing to stage') || text.includes('make repairs') || text.includes('fix things') || text.includes('prepare house')) {
-      analytics.opportunities.push('Willing to prepare property');
+    if (text.includes('foreclosure') || text.includes('behind on payments') || text.includes('financial hardship') || 
+        text.includes('cant afford') || text.includes('job loss') || text.includes('medical bills')) {
+      analytics.opportunities.push('Financial distress situation');
     }
     
-    // Viewing interest (BUYER)
-    if (text.includes('want to see') || text.includes('schedule showing') || text.includes('when can we visit')) {
-      analytics.opportunities.push('Ready to view property');
+    if (text.includes('divorce') || text.includes('death') || text.includes('inherited') || text.includes('estate') ||
+        text.includes('relocating') || text.includes('job transfer') || text.includes('military')) {
+      analytics.opportunities.push('Life change driving sale');
     }
     
-    // Listing readiness (SELLER)
-    if (text.includes('ready to list') || text.includes('want to sell') || text.includes('when can we start')) {
-      analytics.opportunities.push('Ready to move forward with listing');
+    if (text.includes('as-is') || text.includes('no repairs') || text.includes('any condition') || text.includes('needs work') ||
+        text.includes('fixer') || text.includes('handyman special')) {
+      analytics.opportunities.push('Accepts as-is condition');
     }
     
-    // Family/lifestyle fit (BUYER)
-    if (text.includes('kids would love') || text.includes('family room') || text.includes('perfect for us')) {
-      analytics.opportunities.push('Lifestyle fit identified');
+    if (text.includes('cash') || text.includes('no financing') || text.includes('quick closing') || text.includes('fast close') ||
+        text.includes('days not months') || text.includes('no loan contingency')) {
+      analytics.opportunities.push('Values cash offer benefits');
     }
     
-    // Decision maker indicators (BUYER & SELLER)
-    if (text.includes('i decide') || text.includes('my decision') || text.includes('we can approve') || text.includes('final say') ||
-        text.includes('my house') || text.includes('sole owner')) {
+    if (text.includes('no fees') || text.includes('no commission') || text.includes('save money') || text.includes('no realtor') ||
+        text.includes('avoid fees') || text.includes('keep more money')) {
+      analytics.opportunities.push('Cost savings motivation');
+    }
+    
+    if (text.includes('easy') || text.includes('simple') || text.includes('hassle-free') || text.includes('convenient') ||
+        text.includes('no showings') || text.includes('no staging') || text.includes('one stop')) {
+      analytics.opportunities.push('Values convenience and simplicity');
+    }
+    
+    if (text.includes('i decide') || text.includes('my decision') || text.includes('my house') || text.includes('sole owner') ||
+        text.includes('up to me') || text.includes('my choice')) {
       analytics.opportunities.push('Decision maker identified');
     }
     
-    // Market awareness (BUYER & SELLER)
-    if (text.includes('before someone else') || text.includes('dont want to lose') || text.includes('market is hot') ||
-        text.includes('prices going up') || text.includes('good time to sell')) {
-      analytics.opportunities.push('Market urgency awareness');
+    if (text.includes('private sale') || text.includes('no sign') || text.includes('discreet') || text.includes('confidential') ||
+        text.includes('neighbors') || text.includes('quiet sale')) {
+      analytics.opportunities.push('Privacy concerns favor direct sale');
     }
     
-    // Trust building (SELLER)
-    if (text.includes('you seem knowledgeable') || text.includes('like your approach') || text.includes('trust you')) {
+    if (text.includes('bad realtor') || text.includes('disappointed') || text.includes('listing expired') || 
+        text.includes('overpriced') || text.includes('no showings') || text.includes('failed to sell')) {
+      analytics.opportunities.push('Negative realtor experience');
+    }
+    
+    if (text.includes('you seem honest') || text.includes('straightforward') || text.includes('trust you') ||
+        text.includes('fair') || text.includes('helpful') || text.includes('professional')) {
       analytics.opportunities.push('Trust and rapport building');
+    }
+    
+    if (text.includes('rental') || text.includes('investment') || text.includes('tenant') || text.includes('cash flow') ||
+        text.includes('flip') || text.includes('business decision')) {
+      analytics.opportunities.push('Investment property (less emotional)');
+    }
+    
+    if (text.includes('other properties') || text.includes('portfolio') || text.includes('several houses') ||
+        text.includes('more than one') || text.includes('investment properties')) {
+      analytics.opportunities.push('Multiple property owner');
     }
   }
 
@@ -386,18 +387,48 @@ class EnhancedConversationTracker {
   }
 
   endCall(callSid: string) {
+    console.log('🛑 endCall: Ending conversation for callSid:', callSid);
     const conversation = this.conversations.get(callSid);
     if (conversation) {
-      // Store final analytics for reporting
-      console.log(`Call ${callSid} ended. Final analytics:`, conversation.analytics);
+      console.log(`📊 endCall: Final analytics for ${callSid}:`, conversation.analytics);
+      console.log(`📝 endCall: Final turn count for ${callSid}:`, conversation.turns.length);
+    } else {
+      console.log(`⚠️ endCall: No conversation found to end for callSid:`, callSid);
     }
     this.conversations.delete(callSid);
+    console.log('🗑️ endCall: Deleted conversation for callSid:', callSid);
   }
 }
 
 class EnhancedCoachingService {
   private tracker = new EnhancedConversationTracker();
 
+  getConversation(callSid: string) {
+    return this.tracker.getConversation(callSid);
+  }
+
+  async generateReport(
+    callSid: string,
+  ): Promise<CallReport | null> {
+    const conversation = this.tracker.getConversation(callSid);
+    console.log('conversation', conversation);
+    if (!conversation) {
+      Array.from((this.tracker as any).conversations.keys());
+      return null;
+    }
+    
+    const { turns, tipHistory } = conversation;
+    const detailedReport = await openaiService.generateDetailedCallReport(turns, tipHistory);
+    if (detailedReport) {
+      const callReport: CallReport = {
+        turns: detailedReport
+      };
+      return callReport;
+    }
+    
+    return null;
+  }
+  
   async processTranscript(
     callSid: string,
     track: string,
@@ -417,13 +448,26 @@ class EnhancedCoachingService {
 
       this.tracker.addTranscript(callSid, speaker, actualTranscript, timestamp);
       
-      const conversation = this.tracker.getConversation(callSid);
+      let conversation = this.tracker.getConversation(callSid);
       if (!conversation) {
         this.tracker.initializeCall(callSid);
-        return null;
+        conversation = this.tracker.getConversation(callSid);
+        if (!conversation) {
+          console.error(`Failed to initialize conversation for ${callSid}`);
+          return null;
+        }
       }
 
       if (speaker === 'agent') {
+        return null;
+      }
+
+      const now = Date.now();
+      const timeSinceLastTip = now - conversation.lastTipTime;
+      const minTimeBetweenTips = 12000;
+      
+      if (timeSinceLastTip < minTimeBetweenTips) {
+        console.log(`Skipping tip generation - only ${timeSinceLastTip}ms since last tip (minimum: ${minTimeBetweenTips}ms)`);
         return null;
       }
 
@@ -469,7 +513,6 @@ class EnhancedCoachingService {
       duration: Date.now() - conversation.callStartTime,
       previousTipCount: conversation.tipHistory?.length || 0
     };
-
     try {
       const tipData = await openaiService.generateCoachingTip({
         conversationHistory: turns,
@@ -528,11 +571,15 @@ class EnhancedCoachingService {
     }
 
     if (analytics.customerSentiment === 'positive' && analytics.conversationStage !== 'closing') {
-      insights.push('Customer is engaged - good time to move toward closing');
+      insights.push('Seller is engaged - good time to move toward making an offer');
     }
 
     if (analytics.riskFactors.length > 2) {
-      insights.push('Multiple risk factors detected - focus on addressing concerns');
+      insights.push('Multiple risk factors detected - focus on addressing seller concerns');
+    }
+
+    if (analytics.opportunities.some((op: string) => op.includes('motivated') || op.includes('distress'))) {
+      insights.push('Motivated seller detected - emphasize quick cash solutions');
     }
 
     return insights;
@@ -540,6 +587,10 @@ class EnhancedCoachingService {
 
   endCall(callSid: string) {
     return this.tracker.endCall(callSid);
+  }
+
+  initializeCall(callSid: string, customerData?: any) {
+    return this.tracker.initializeCall(callSid, customerData);
   }
 }
 

@@ -75,3 +75,16 @@ model Stream {
 
   @@map("streams")
 }
+
+model CallReport {
+  id              String            @id @default(cuid())
+  callSid         String            @unique
+  reportData      Json              // Stores the complete report structure
+  totalTurns      Int?              // Total number of turns in conversation
+  totalTips       Int?              // Total number of coaching tips generated
+  usedTips        Int?              // Number of tips that were actually used
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("call_reports")
+}

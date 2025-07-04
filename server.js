@@ -70,7 +70,6 @@ app.prepare().then(() => {
     }
     try {
       const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET || 'fallback-secret');
-      console.log(decoded);
       socket.userId = decoded.userId;
       socket.handshake.auth.identity = decoded.userId;
       next();
