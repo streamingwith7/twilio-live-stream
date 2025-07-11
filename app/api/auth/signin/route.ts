@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify password
     const isValidPassword = await verifyPassword(password, user.password)
 
     if (!isValidPassword) {
@@ -35,11 +34,8 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
-
-    // Generate token
     const token = generateToken(user.id)
 
-    // Remove password from response
     const { password: _, ...userWithoutPassword } = user
 
     return NextResponse.json({
