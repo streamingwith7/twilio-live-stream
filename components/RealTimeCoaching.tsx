@@ -14,21 +14,33 @@ interface CoachingTip {
   conversationStage: string;
 }
 
+interface CallAnalytics {
+  conversationStage: 'opening' | 'discovery' | 'presentation' | 'objection' | 'closing';
+  customerSentiment: 'positive' | 'negative' | 'neutral';
+  agentPerformance: number;
+  talkRatio: { agent: number; customer: number };
+  keyMoments: string[];
+  detectedIntents: string[];
+  riskFactors: string[];
+  opportunities: string[];
+}
+
 interface SimpleRealTimeCoachingProps {
   callSid?: string;
   isCallActive: boolean;
   onError?: (error: string) => void;
 }
 
-export default function SimpleRealTimeCoaching({ 
-  callSid, 
-  isCallActive, 
-  onError 
+export default function SimpleRealTimeCoaching({
+  callSid,
+  isCallActive,
+  onError
 }: SimpleRealTimeCoachingProps) {
   const [tips, setTips] = useState<CoachingTip[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
-  
+  const [analytics, setAnalytics] = useState<CallAnalytics | null>(null);
+
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -38,9 +50,9 @@ export default function SimpleRealTimeCoaching({
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token || !isCallActive) return
-    
+
     console.log('🤖 Initializing coaching socket for callSid:', callSid);
-    
+
     const newSocket = io({
       auth: { token },
       transports: ['polling', 'websocket'],
@@ -64,18 +76,23 @@ export default function SimpleRealTimeCoaching({
 
     newSocket.on('enhancedCoachingTip', (tip: CoachingTip) => {
       console.log('🤖 Received coaching tip:', tip)
-      
+
       setTips(prevTips => {
         const newTips = [...prevTips, tip];
         return newTips;
       });
       setPosition({ x: 0, y: 0 });
-      
+
       setTimeout(() => {
         if (scrollRef.current) {
           scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
       }, 100);
+    })
+
+    newSocket.on('analyticsUpdate', (data) => {
+      console.log('🤖 Received analytics update:', data)
+      setAnalytics(data.analytics);
     })
 
     newSocket.on('coachingError', (data) => {
@@ -98,13 +115,14 @@ export default function SimpleRealTimeCoaching({
     if (!isCallActive) {
       setTips([])
       setError(null)
+      setAnalytics(null)
       setPosition({ x: 0, y: 0 });
     }
   }, [isCallActive])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!modalRef.current) return;
-    
+
     setIsDragging(true);
     const rect = modalRef.current.getBoundingClientRect();
     setDragOffset({
@@ -115,13 +133,13 @@ export default function SimpleRealTimeCoaching({
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging) return;
-    
+
     const newX = e.clientX - dragOffset.x;
     const newY = e.clientY - dragOffset.y;
-    
+
     const maxX = window.innerWidth - 600;
     const maxY = window.innerHeight - 300;
-    
+
     setPosition({
       x: Math.max(-300, Math.min(maxX - 300, newX - window.innerWidth / 2)),
       y: Math.max(-150, Math.min(maxY - 150, newY - window.innerHeight / 4))
@@ -171,14 +189,43 @@ export default function SimpleRealTimeCoaching({
     }
   };
 
+  const getStageIcon = (stage: string) => {
+    switch (stage) {
+      case 'opening': return '👋';
+      case 'discovery': return '🔍';
+      case 'presentation': return '📋';
+      case 'objection': return '⚠️';
+      case 'closing': return '🤝';
+      default: return '💬';
+    }
+  };
+
+  const getSentimentIcon = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive': return '😊';
+      case 'negative': return '😞';
+      case 'neutral': return '😐';
+      default: return '🤔';
+    }
+  };
+
+  const getSentimentColor = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive': return 'text-green-400';
+      case 'negative': return 'text-red-400';
+      case 'neutral': return 'text-yellow-400';
+      default: return 'text-gray-400';
+    }
+  };
+
   if (!isCallActive && tips.length === 0) {
     return null;
   }
 
   return (
     <>
-      {tips.length > 0 && (
-        <div 
+      {(tips.length > 0 || analytics) && (
+        <div
           ref={modalRef}
           className="fixed z-50 w-full max-w-2xl mx-4"
           style={{
@@ -188,7 +235,7 @@ export default function SimpleRealTimeCoaching({
             cursor: isDragging ? 'grabbing' : 'grab'
           }}
         >
-          <div 
+          <div
             className="flex items-center justify-between px-3 py-2 bg-slate-800 text-white border border-slate-700 rounded-t-lg cursor-grab active:cursor-grabbing"
             onMouseDown={handleMouseDown}
           >
@@ -210,15 +257,45 @@ export default function SimpleRealTimeCoaching({
             </button>
           </div>
 
-                      <div 
-              ref={scrollRef}
-              className="h-[300px] overflow-y-auto bg-slate-800 text-white border-x border-b border-slate-700 rounded-b-lg"
-              style={{ scrollBehavior: 'smooth' }}
+          {analytics && (
+            <div className="bg-slate-700 border-x border-slate-600 px-4 py-3">
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div className="flex items-center space-x-2">
+                  <span className="text-slate-300">Stage:</span>
+                  <span className="flex items-center space-x-1">
+                    <span>{getStageIcon(analytics.conversationStage)}</span>
+                    <span className="font-medium capitalize">{analytics.conversationStage}</span>
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-slate-300">Sentiment:</span>
+                  <span className={`flex items-center space-x-1 ${getSentimentColor(analytics.customerSentiment)}`}>
+                    <span>{getSentimentIcon(analytics.customerSentiment)}</span>
+                    <span className="font-medium capitalize">{analytics.customerSentiment}</span>
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-slate-300">Agent:</span>
+                  <span className="text-blue-400 font-medium">{Math.round(analytics.talkRatio.agent)}%</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-slate-300">Customer:</span>
+                  <span className="text-green-400 font-medium">{Math.round(analytics.talkRatio.customer)}%</span>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          <div
+            ref={scrollRef}
+            className="h-[300px] overflow-y-auto bg-slate-800 text-white border-x border-b border-slate-700 rounded-b-lg"
+            style={{ scrollBehavior: 'smooth' }}
           >
             {tips.map((tip, index) => (
               <div key={tip.id} className={`${index > 0 ? 'border-t border-slate-600' : ''}`}>
                 <div className="flex">
-                  
+
                   {tip.suggestedScript && (
                     <div className="flex-1 p-4 border-r border-slate-600">
                       <div className="text-xs font-semibold text-green-400 mb-2 uppercase tracking-wide flex items-center">
@@ -231,7 +308,6 @@ export default function SimpleRealTimeCoaching({
                     </div>
                   )}
 
-                  {/* RIGHT SIDE - Coaching Tip */}
                   <div className={`${tip.suggestedScript ? 'w-80' : 'flex-1'} p-4`}>
                     <div className="text-xs font-semibold text-blue-400 mb-2 uppercase tracking-wide flex items-center">
                       {!tip.suggestedScript && <span className="mr-1">{getUrgencyIcon(tip.urgency)}</span>}
@@ -244,7 +320,6 @@ export default function SimpleRealTimeCoaching({
 
                 </div>
 
-                {/* Urgency Indicator Bar */}
                 <div className={`h-1 ${getUrgencyColor(tip.urgency)}`}></div>
               </div>
             ))}
@@ -257,7 +332,7 @@ export default function SimpleRealTimeCoaching({
           <div className="flex items-center space-x-2">
             <span>❌</span>
             <span>{error}</span>
-            <button 
+            <button
               onClick={() => setError(null)}
               className="ml-2 text-white hover:text-gray-200"
             >

@@ -23,6 +23,13 @@ interface TurnWithTip {
   }
 }
 
+interface IncrementalReport {
+  startTurnIndex: number;
+  endTurnIndex: number;
+  turns: TurnWithTip[];
+  timestamp: string;
+}
+
 interface CallAnalytics {
   conversationStage: 'opening' | 'discovery' | 'presentation' | 'objection' | 'closing';
   customerSentiment: 'positive' | 'negative' | 'neutral';
@@ -55,6 +62,8 @@ class EnhancedConversationTracker {
     customerProfile?: any;
     lastSpeaker?: 'agent' | 'customer';
     customerJustFinishedSpeaking: boolean;
+    incrementalReports: IncrementalReport[];
+    lastReportTurnCount: number;
   }>();
 
   initializeCall(callSid: string, customerData?: any) {
@@ -76,7 +85,9 @@ class EnhancedConversationTracker {
       callStartTime: Date.now(),
       customerProfile: customerData,
       lastSpeaker: undefined,
-      customerJustFinishedSpeaking: false
+      customerJustFinishedSpeaking: false,
+      incrementalReports: [],
+      lastReportTurnCount: 0
     });
     console.log('✅ initializeCall: Successfully initialized conversation for callSid:', callSid);
   }
@@ -103,6 +114,11 @@ class EnhancedConversationTracker {
 
     conversation.turns.push(turn);
     this.updateAnalytics(callSid, turn);
+    
+    // Check if we should generate an incremental report (fire and forget)
+    this.checkForIncrementalReport(callSid, speaker).catch(error => {
+      console.error('Error in incremental report generation:', error);
+    });
   }
 
   private analyzeSentiment(text: string): 'positive' | 'negative' | 'neutral' {
@@ -382,6 +398,70 @@ class EnhancedConversationTracker {
     }
   }
 
+  async checkForIncrementalReport(callSid: string, currentSpeaker: 'agent' | 'customer') {
+    const conversation = this.conversations.get(callSid);
+    if (!conversation) return;
+
+    const { turns, lastReportTurnCount } = conversation;
+    const currentTurnCount = turns.length;
+    
+    // Generate report every 10 turns, but only if the current turn is from agent
+    // This ensures we can see if the agent used the previous tip
+    if (currentSpeaker === 'agent' && 
+        currentTurnCount >= lastReportTurnCount + 10 && 
+        currentTurnCount > 10) {
+      
+      try {
+        const incrementalReport = await this.generateIncrementalReport(callSid, lastReportTurnCount, currentTurnCount);
+        if (incrementalReport) {
+          conversation.incrementalReports.push(incrementalReport);
+          conversation.lastReportTurnCount = currentTurnCount;
+        }
+      } catch (error) {
+        console.error('Error generating incremental report:', error);
+      }
+    }
+  }
+
+  private async generateIncrementalReport(callSid: string, startIndex: number, endIndex: number): Promise<IncrementalReport | null> {
+    const conversation = this.conversations.get(callSid);
+    if (!conversation) return null;
+
+    const { turns, tipHistory } = conversation;
+    
+    // Get the turns for this incremental report
+    const reportTurns = turns.slice(startIndex, endIndex);
+    
+    // Get tips that were generated during this period
+    const reportTips = tipHistory.filter(tip => {
+      const tipTime = new Date(tip.timestamp).getTime();
+      const startTime = new Date(reportTurns[0]?.timestamp || Date.now()).getTime();
+      const endTime = new Date(reportTurns[reportTurns.length - 1]?.timestamp || Date.now()).getTime();
+      return tipTime >= startTime && tipTime <= endTime;
+    });
+
+    try {
+      const detailedReport = await openaiService.generateDetailedCallReport(reportTurns, reportTips);
+      if (detailedReport) {
+        return {
+          startTurnIndex: startIndex,
+          endTurnIndex: endIndex,
+          turns: detailedReport,
+          timestamp: new Date().toISOString()
+        };
+      }
+    } catch (error) {
+      console.error('Error generating incremental report:', error);
+    }
+    
+    return null;
+  }
+
+  getIncrementalReports(callSid: string): IncrementalReport[] {
+    const conversation = this.conversations.get(callSid);
+    return conversation?.incrementalReports || [];
+  }
+
   getConversation(callSid: string) {
     return this.conversations.get(callSid);
   }
@@ -417,7 +497,44 @@ class EnhancedCoachingService {
       return null;
     }
     
-    const { turns, tipHistory } = conversation;
+    const { turns, tipHistory, lastReportTurnCount } = conversation;
+    const incrementalReports = this.tracker.getIncrementalReports(callSid);
+    
+    const allTurns: TurnWithTip[] = [];
+    
+    incrementalReports.forEach(report => {
+      allTurns.push(...report.turns);
+    });
+    
+    if (lastReportTurnCount < turns.length) {
+      console.log(`📊 Generating final report for remaining turns ${lastReportTurnCount + 1}-${turns.length}`);
+      
+      const remainingTurns = turns.slice(lastReportTurnCount);
+      const remainingTips = tipHistory.filter(tip => {
+        const tipTime = new Date(tip.timestamp).getTime();
+        const startTime = new Date(remainingTurns[0]?.timestamp || Date.now()).getTime();
+        const endTime = new Date(remainingTurns[remainingTurns.length - 1]?.timestamp || Date.now()).getTime();
+        return tipTime >= startTime && tipTime <= endTime;
+      });
+      
+      try {
+        const finalReport = await openaiService.generateDetailedCallReport(remainingTurns, remainingTips);
+        if (finalReport) {
+          allTurns.push(...finalReport);
+        }
+      } catch (error) {
+        console.error('Error generating final report:', error);
+      }
+    }
+    
+    if (allTurns.length > 0) {
+      const callReport: CallReport = {
+        turns: allTurns
+      };
+      return callReport;
+    }
+    
+    console.log('⚠️ No incremental reports found, falling back to full conversation analysis');
     const detailedReport = await openaiService.generateDetailedCallReport(turns, tipHistory);
     if (detailedReport) {
       const callReport: CallReport = {
@@ -668,6 +785,22 @@ class EnhancedCoachingService {
   getCallAnalytics(callSid: string) {
     const conversation = this.tracker.getConversation(callSid);
     return conversation?.analytics;
+  }
+
+  getIncrementalReports(callSid: string) {
+    return this.tracker.getIncrementalReports(callSid);
+  }
+
+  getIncrementalReportStatus(callSid: string) {
+    const conversation = this.tracker.getConversation(callSid);
+    if (!conversation) return null;
+    
+    return {
+      totalTurns: conversation.turns.length,
+      lastReportTurnCount: conversation.lastReportTurnCount,
+      incrementalReportsCount: conversation.incrementalReports.length,
+      hasRemainingTurns: conversation.lastReportTurnCount < conversation.turns.length
+    };
   }
 
   generateCallSummary(callSid: string) {

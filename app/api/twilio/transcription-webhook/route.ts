@@ -317,6 +317,14 @@ export async function GET(request: NextRequest) {
           insights: insights?.keyInsights || []
         });
 
+      case 'incremental-status':
+        const status = coachingService.getIncrementalReportStatus(callSid);
+        return NextResponse.json({ callSid, status });
+
+      case 'incremental-reports':
+        const reports = coachingService.getIncrementalReports(callSid);
+        return NextResponse.json({ callSid, reports });
+
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }

@@ -104,25 +104,25 @@ class EnhancedOpenAIService {
             role: "user", 
             content: `Analyze this sales conversation performance:
 
-CONVERSATION EXCERPT:
-${conversationText}
+            CONVERSATION EXCERPT:
+            ${conversationText}
 
-CURRENT ANALYTICS:
-- Stage: ${analytics.conversationStage}
-- Customer Sentiment: ${analytics.customerSentiment}
-- Talk Ratio: Agent ${analytics.talkRatio?.agent?.toFixed(1)}%, Customer ${analytics.talkRatio?.customer?.toFixed(1)}%
+            CURRENT ANALYTICS:
+            - Stage: ${analytics.conversationStage}
+            - Customer Sentiment: ${analytics.customerSentiment}
+            - Talk Ratio: Agent ${analytics.talkRatio?.agent?.toFixed(1)}%, Customer ${analytics.talkRatio?.customer?.toFixed(1)}%
 
-Provide ONLY this JSON (no markdown, no code blocks):
-{
-  "overallScore": 75,
-  "strengths": ["what agent is doing well"],
-  "improvements": ["specific areas to improve"],
-  "riskFactors": ["conversation risks"],
-  "opportunities": ["missed or potential opportunities"],
-  "nextBestActions": ["immediate recommended actions"],
-  "strategicAdvice": "high-level guidance for this conversation",
-  "reasoning": "detailed explanation of assessment"
-}`
+            Provide ONLY this JSON (no markdown, no code blocks):
+            {
+            "overallScore": 75,
+            "strengths": ["what agent is doing well"],
+            "improvements": ["specific areas to improve"],
+            "riskFactors": ["conversation risks"],
+            "opportunities": ["missed or potential opportunities"],
+            "nextBestActions": ["immediate recommended actions"],
+            "strategicAdvice": "high-level guidance for this conversation",
+            "reasoning": "detailed explanation of assessment"
+            }`
           }
         ],
         temperature: 0.4,
@@ -375,7 +375,8 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
             2. If a tip was generated around this turn (within 30 seconds after)
             3. If the tip was actually USED by the agent in subsequent responses (analyze agent's behavior change, not exact text match)
             4. Tip is used only by agent, but customer never use tips.
-            5. So tip should be in agent response only. Also tip is generated before user say
+            5. So tip isUsed should be defined by agent response only.
+            6. Agent can use previous tips, so you should consider it
             6. Don't change original turns, just update tip usage (isUsed field)
             7. You should generate fully completed JSON structure, not just a part of it.
             8. JSON without any other text or comments or markdown
@@ -383,19 +384,19 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
             Return ONLY this JSON structure (no markdown, no code blocks):
             {
             "turns": [
-              {
-                "customer": "customer text if this turn was from customer (omit if agent turn)",
-                "timestamp": "exact timestamp from the original turn data",
-              },
-              {
-                "tip": {
-                  "content": "tip content if a tip was generated for this turn",
+                {
+                  "customer": "customer text if this turn was from customer (omit if agent turn)",
+                  "timestamp": "exact timestamp from the original turn data",
+                },
+                {
+                  "tip": "tip content if a tip was generated for this turn",
                   "isUsed": true/false based on whether agent actually followed/used the tip,
                   "timestamp": "exact timestamp from the tip data"
                 },
-                "agent": "agent text if this turn was from agent (omit if customer turn)",
-                "timestamp": "exact timestamp from the original turn data",
-              }
+                {
+                  "agent": "agent text if this turn was from agent (omit if customer turn)",
+                  "timestamp": "exact timestamp from the original turn data",
+                }
               ]
             }
 

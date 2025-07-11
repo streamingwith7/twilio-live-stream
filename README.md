@@ -17,6 +17,8 @@ A comprehensive Next.js application with real-time Twilio call monitoring, bidir
 - **Intelligent Call Management**: Automatic call lifecycle tracking
 - **Real-time UI Updates**: Live transcription display with speaker identification
 - **Professional Dashboard**: Beautiful glass morphism UI with mobile responsiveness
+- **Incremental Report Generation**: Generate detailed call reports every 10 turns to avoid large conversation processing issues
+- **AI Coaching Integration**: Real-time sales coaching tips and strategy recommendations
 
 ## 🏗️ Architecture
 
@@ -116,6 +118,9 @@ npm run dev
 - `newTranscription` - Live transcription messages
 - `callStarted` - New call initiated
 - `callCompleted` - Call ended
+- `enhancedCoachingTip` - Real-time AI coaching recommendations
+- `callStrategyUpdate` - Dynamic call strategy updates
+- `analyticsUpdate` - Live conversation analytics
 
 ## 🎯 Real-time Features
 
@@ -125,6 +130,20 @@ Instead of checking call status every 5 seconds, the system uses:
 - **WebSocket Broadcasting**: Real-time UI updates
 - **Media Stream Events**: Live audio processing
 - **Database Triggers**: Automatic transcription storage
+
+### Incremental Report Generation
+To handle large conversations efficiently and avoid AI processing errors:
+
+- **Every 10 Turns**: Generate detailed reports incrementally (ending with agent turn)
+- **Tip Usage Tracking**: Determine if coaching tips were actually used by agents
+- **Merged Final Report**: Combine all incremental reports into comprehensive final report
+- **Database Storage**: Save complete call analysis with tip effectiveness metrics
+
+**Benefits:**
+- Prevents AI processing errors from large conversation contexts
+- Provides real-time coaching effectiveness tracking
+- Maintains conversation quality analysis accuracy
+- Enables detailed call performance insights
 
 ### Audio Processing Pipeline
 1. **Twilio Media Streams**: Capture μ-law encoded audio (8kHz, 8-bit)

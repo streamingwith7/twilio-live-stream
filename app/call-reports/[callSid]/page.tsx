@@ -10,11 +10,8 @@ import LoadingSpinner from '@/components/LoadingSpinner'
 interface Turn {
   agent?: string
   customer?: string
-  tip?: {
-    isUsed: boolean
-    content: string
-    timestamp: string
-  }
+  tip?: string
+  isUsed?: boolean
   timestamp: string
 }
 
@@ -140,33 +137,6 @@ export default function CallReportDetailPage() {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
-  const getMessageType = (turn: Turn) => {
-    if (turn.agent) return 'agent'
-    if (turn.customer) return 'customer'
-    if (turn.tip) return 'tip'
-    return 'unknown'
-  }
-
-  const getMessageContent = (turn: Turn) => {
-    if (turn.agent) return turn.agent
-    if (turn.customer) return turn.customer
-    if (turn.tip) return turn.tip.content
-    return ''
-  }
-
-  const getMessageStyle = (type: string) => {
-    switch (type) {
-      case 'agent':
-        return 'bg-green-500 text-white'
-      case 'customer':
-        return 'bg-gray-200 text-gray-900'
-      case 'tip':
-        return 'bg-blue-500 text-white'
-      default:
-        return 'bg-gray-200 text-gray-900'
-    }
-  }
-
   const getAvatar = (type: string) => {
     switch (type) {
       case 'agent':
@@ -260,6 +230,8 @@ export default function CallReportDetailPage() {
       {report?.reportData?.turns?.length && report.reportData.turns.length > 0 ? (
         report.reportData.turns.map((turn, index) => {
           console.log('Processing turn:', turn)
+          
+          // Handle customer turns
           if (turn.customer && !turn.agent && !turn.tip) {
             return (
               <div key={`customer-${index}`} className="flex justify-start">
@@ -276,52 +248,53 @@ export default function CallReportDetailPage() {
             )
           }
 
-          if (turn.agent) {
+          // Handle agent turns (only agent content, no nested tips)
+          if (turn.agent && !turn.tip) {
             return (
-              <div key={`agent-${index}`} className="space-y-4">
-                {turn.tip && (
-                  <div className="flex justify-end">
-                    <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
-                      {getAvatar('tip')}
-                      <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl px-4 py-3 shadow-lg">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-xs font-medium text-green-100">AI Coach</span>
-                          <span className="text-xs text-green-200">
-                            {formatTimestamp(turn.tip.timestamp)}
-                          </span>
-                        </div>
-                        <p className="text-sm text-white">{turn.tip.content}</p>
-                        <div className="flex items-center justify-center mt-3">
-                          {turn.tip.isUsed ? (
-                            <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                              </svg>
-                              <span>Used</span>
-                            </span>
-                          ) : (
-                            <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                              </svg>
-                              <span>Not Used</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
+              <div key={`agent-${index}`} className="flex justify-end">
+                <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
+                  {getAvatar('agent')}
+                  <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
+                    <p className="text-sm whitespace-pre-wrap">{turn.agent}</p>
+                    <p className="text-xs mt-2 text-gray-500">
+                      {formatTimestamp(turn.timestamp)}
+                    </p>
                   </div>
-                )}
+                </div>
+              </div>
+            )
+          }
 
-                {/* Agent Message */}
-                <div className="flex justify-end">
-                  <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
-                    {getAvatar('agent')}
-                    <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
-                      <p className="text-sm whitespace-pre-wrap">{turn.agent}</p>
-                      <p className="text-xs mt-2 text-gray-500">
-                        {formatTimestamp(turn.timestamp)}
-                      </p>
+          // Handle tip turns (standalone tips)
+          if (turn.tip) {
+            return (
+              <div key={`tip-${index}`} className="flex justify-end">
+                <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
+                  {getAvatar('tip')}
+                  <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl px-4 py-3 shadow-lg">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <span className="text-xs font-medium text-green-100">AI Coach</span>
+                      <span className="text-xs text-green-200">
+                        {formatTimestamp(turn.tip)}
+                      </span>
+                    </div>
+                    <p className="text-sm text-white">{turn.tip}</p>
+                    <div className="flex items-center justify-center mt-3">
+                      {turn.isUsed ? (
+                        <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <span>Used</span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
+                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                          <span>Not Used</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
