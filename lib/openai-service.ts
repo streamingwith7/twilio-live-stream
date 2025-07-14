@@ -63,8 +63,6 @@ class EnhancedOpenAIService {
     }
   }
 
-
-
   async analyzeSentiment(text: string, speaker: 'agent' | 'customer'): Promise<any> {
     try {
       const prompt = PROMPT_HELPERS.buildSentimentContext(text, speaker);
@@ -76,12 +74,11 @@ class EnhancedOpenAIService {
           { role: "user", content: prompt }
         ],
         temperature: 0.3,
-        max_tokens: 150, // Reduced for simpler analysis
+        max_tokens: 150,
         response_format: { type: "json_object" }
       });
 
       const content = response.choices[0]?.message?.content;
-      console.log('sentiment analysis', content);
       return content ? this.parseJsonResponse(content) : null;
     } catch (error) {
       console.error('Error analyzing sentiment:', error);
@@ -218,13 +215,11 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
 
   async chatWithFunctions(messages: any[], functions: any[], options: any = {}): Promise<any> {
     try {
-      // Convert legacy functions format to new tools format
       const tools = functions.map(func => ({
         type: "function",
         function: func
       }));
 
-      // Convert legacy function_call to new tool_choice format
       let tool_choice: any = "auto";
       if (options.function_call) {
         if (typeof options.function_call === "string" && options.function_call === "auto") {
@@ -237,7 +232,6 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
         }
       }
 
-      // Create the request parameters, excluding potentially problematic options
       const requestParams: any = {
         model: "gpt-4o-mini",
         messages,
@@ -250,13 +244,6 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
       if (options.top_p) requestParams.top_p = options.top_p;
       if (options.frequency_penalty) requestParams.frequency_penalty = options.frequency_penalty;
       if (options.presence_penalty) requestParams.presence_penalty = options.presence_penalty;
-
-      console.log('Making OpenAI function call with params:', {
-        model: requestParams.model,
-        toolsCount: tools.length,
-        tool_choice: tool_choice,
-        messagesCount: messages.length
-      });
 
       const response = await openai.chat.completions.create(requestParams);
 
@@ -391,7 +378,8 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
                 {
                   "tip": "tip content if a tip was generated for this turn",
                   "isUsed": true/false based on whether agent actually followed/used the tip,
-                  "timestamp": "exact timestamp from the tip data"
+                  "timestamp": "exact timestamp from the tip data",
+                  "usedTimestamp": "exact timestamp from the agent response if tip was used, so the timestamp when agent used the tip"
                 },
                 {
                   "agent": "agent text if this turn was from agent (omit if customer turn)",

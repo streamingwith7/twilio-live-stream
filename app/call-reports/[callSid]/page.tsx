@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { User } from '@/types'
@@ -13,6 +13,7 @@ interface Turn {
   tip?: string
   isUsed?: boolean
   timestamp: string
+  usedTimestamp?: string
 }
 
 interface FeedbackData {
@@ -84,6 +85,8 @@ export default function CallReportDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'conversation' | 'feedback'>('conversation')
+  const conversationRef = useRef<HTMLDivElement>(null)
+  const turnRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
   const callSid = params.callSid as string
 
@@ -97,7 +100,7 @@ export default function CallReportDetailPage() {
     }
 
     setUser(JSON.parse(userData))
-    
+
     if (callSid) {
       fetchReport()
     }
@@ -108,7 +111,7 @@ export default function CallReportDetailPage() {
       setLoading(true)
       const response = await fetch(`/api/call-reports?callSid=${callSid}`)
       const data = await response.json()
-      
+
       if (response.ok) {
         console.log('Report data received:', data)
         setReport(data)
@@ -124,10 +127,11 @@ export default function CallReportDetailPage() {
   }
 
   const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
+    return new Date(timestamp).toLocaleTimeString('en-US', {
+      hour: '2-digit',
       minute: '2-digit',
-      hour12: true 
+      second: '2-digit',
+      hour12: true
     })
   }
 
@@ -135,6 +139,36 @@ export default function CallReportDetailPage() {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
+  const scrollToUsedTimestamp = (usedTimestamp: string) => {
+    if (!report?.reportData?.turns) return
+
+    // Find the turn that matches the usedTimestamp
+    const targetTurnIndex = report.reportData.turns.findIndex(turn => 
+      turn.timestamp === usedTimestamp && (turn.agent || turn.customer)
+    )
+
+    if (targetTurnIndex !== -1) {
+      const targetElement = turnRefs.current[`turn-${targetTurnIndex}`]
+      if (targetElement && conversationRef.current) {
+        // Scroll the conversation container to the target element
+        const containerRect = conversationRef.current.getBoundingClientRect()
+        const elementRect = targetElement.getBoundingClientRect()
+        const scrollTop = conversationRef.current.scrollTop + elementRect.top - containerRect.top - 100 // 100px offset for better visibility
+
+        conversationRef.current.scrollTo({
+          top: scrollTop,
+          behavior: 'smooth'
+        })
+
+        // Add a temporary highlight effect
+        targetElement.classList.add('ring-2', 'ring-blue-400', 'ring-opacity-75')
+        setTimeout(() => {
+          targetElement.classList.remove('ring-2', 'ring-blue-400', 'ring-opacity-75')
+        }, 2000)
+      }
+    }
   }
 
   const getAvatar = (type: string) => {
@@ -194,19 +228,6 @@ export default function CallReportDetailPage() {
     }
   }
 
-  const getSenderName = (type: string) => {
-    switch (type) {
-      case 'agent':
-        return 'Agent'
-      case 'customer':
-        return 'Customer'
-      case 'tip':
-        return 'AI Coach'
-      default:
-        return 'Unknown'
-    }
-  }
-
   const getScoreColor = (score: number) => {
     if (score >= 8) return 'text-green-600 bg-green-100'
     if (score >= 6) return 'text-yellow-600 bg-yellow-100'
@@ -226,15 +247,18 @@ export default function CallReportDetailPage() {
   }
 
   const renderConversationTab = () => (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
+    <div ref={conversationRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
       {report?.reportData?.turns?.length && report.reportData.turns.length > 0 ? (
         report.reportData.turns.map((turn, index) => {
           console.log('Processing turn:', turn)
-          
-          // Handle customer turns
+
           if (turn.customer && !turn.agent && !turn.tip) {
             return (
-              <div key={`customer-${index}`} className="flex justify-start">
+              <div 
+                key={`customer-${index}`} 
+                ref={el => { turnRefs.current[`turn-${index}`] = el }}
+                className="flex justify-start transition-all duration-200 rounded-lg"
+              >
                 <div className="flex items-end space-x-3 max-w-md">
                   {getAvatar('customer')}
                   <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
@@ -248,10 +272,13 @@ export default function CallReportDetailPage() {
             )
           }
 
-          // Handle agent turns (only agent content, no nested tips)
           if (turn.agent && !turn.tip) {
             return (
-              <div key={`agent-${index}`} className="flex justify-end">
+              <div 
+                key={`agent-${index}`} 
+                ref={el => { turnRefs.current[`turn-${index}`] = el }}
+                className="flex justify-end transition-all duration-200 rounded-lg"
+              >
                 <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
                   {getAvatar('agent')}
                   <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
@@ -265,20 +292,32 @@ export default function CallReportDetailPage() {
             )
           }
 
-          // Handle tip turns (standalone tips)
           if (turn.tip) {
             return (
               <div key={`tip-${index}`} className="flex justify-end">
                 <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
                   {getAvatar('tip')}
-                  <div className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl px-4 py-3 shadow-lg">
+                  <div 
+                    className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl px-4 py-3 shadow-lg cursor-pointer hover:from-green-600 hover:to-green-700 transition-all duration-200"
+                    onClick={() => turn.usedTimestamp && scrollToUsedTimestamp(turn.usedTimestamp)}
+                  >
                     <div className="flex items-center space-x-2 mb-2">
                       <span className="text-xs font-medium text-green-100">AI Coach</span>
                       <span className="text-xs text-green-200">
-                        {formatTimestamp(turn.tip)}
+                        {formatTimestamp(turn.timestamp)}
                       </span>
                     </div>
                     <p className="text-sm text-white">{turn.tip}</p>
+                    
+                    {/* Show used timestamp if available */}
+                    {turn.usedTimestamp && (
+                      <div className="mt-2 pt-2 border-t border-green-400 border-opacity-30">
+                        <p className="text-xs text-green-200">
+                          Applied at: {formatTimestamp(turn.usedTimestamp)}
+                        </p>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-center mt-3">
                       {turn.isUsed ? (
                         <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
@@ -286,6 +325,9 @@ export default function CallReportDetailPage() {
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                           </svg>
                           <span>Used</span>
+                          {turn.usedTimestamp && (
+                            <span className="text-green-300">• Click to view</span>
+                          )}
                         </span>
                       ) : (
                         <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
@@ -321,7 +363,7 @@ export default function CallReportDetailPage() {
 
   const renderFeedbackTab = () => {
     const feedback = report?.feedback
-    
+
     if (!feedback) {
       return (
         <div className="flex-1 overflow-y-auto p-6">
@@ -340,7 +382,6 @@ export default function CallReportDetailPage() {
 
     return (
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
-        {/* Overall Score Card */}
         {feedback.totalScore !== undefined && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">
@@ -349,14 +390,13 @@ export default function CallReportDetailPage() {
                 {feedback.totalScore}/100
               </div>
             </div>
-            
+
             {feedback.callType && (
               <p className="text-sm text-gray-600 mb-4">
                 <span className="font-medium">Call Type:</span> {feedback.callType}
               </p>
             )}
 
-            {/* Score Breakdown */}
             {feedback.scores && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {Object.entries(feedback.scores).map(([key, score]) => (
@@ -387,7 +427,6 @@ export default function CallReportDetailPage() {
           </div>
         )}
 
-        {/* Improvement Areas */}
         {(feedback.improvementArea1 || feedback.improvementArea2) && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center mb-4">
@@ -607,7 +646,7 @@ export default function CallReportDetailPage() {
               <div>
                 <h2 className="text-3xl font-bold text-gray-900">Call Report Details</h2>
                 <p className="mt-2 text-gray-600">Call SID: {report.callSid}</p>
-                
+
                 {/* Call Details */}
                 {(report.fromNumber || report.toNumber || report.duration) && (
                   <div className="mt-3 space-y-1">
@@ -629,9 +668,9 @@ export default function CallReportDetailPage() {
                     {report.recordingUrl && (
                       <p className="text-sm text-gray-600">
                         <span className="font-medium">Recording:</span>{' '}
-                        <a 
-                          href={report.recordingUrl} 
-                          target="_blank" 
+                        <a
+                          href={report.recordingUrl}
+                          target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:text-blue-800 underline"
                         >
@@ -641,13 +680,13 @@ export default function CallReportDetailPage() {
                     )}
                   </div>
                 )}
-                
+
                 <p className="mt-1 text-sm text-gray-500">
-                  {new Date(report.createdAt).toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
+                  {new Date(report.createdAt).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
                   })}
                 </p>
               </div>
@@ -666,11 +705,10 @@ export default function CallReportDetailPage() {
               <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
                 <button
                   onClick={() => setActiveTab('conversation')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'conversation'
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'conversation'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center space-x-2">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -681,11 +719,10 @@ export default function CallReportDetailPage() {
                 </button>
                 <button
                   onClick={() => setActiveTab('feedback')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'feedback'
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'feedback'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center space-x-2">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -701,7 +738,7 @@ export default function CallReportDetailPage() {
                 </button>
               </nav>
             </div>
-            
+
             {/* Tab Content */}
             {activeTab === 'conversation' ? renderConversationTab() : renderFeedbackTab()}
           </div>
@@ -709,4 +746,4 @@ export default function CallReportDetailPage() {
       </main>
     </div>
   )
-} 
+}

@@ -50,8 +50,6 @@ app.prepare().then(() => {
       res.end('internal server error');
     }
   });
-  // Socket.IO Server Setup with Room Management
-  // Supports both call rooms and transcription rooms for organized event handling
   const io = new Server(httpServer, {
     cors: {
       origin: dev ? 'http://localhost:5000' : process.env.NEXT_PUBLIC_SITE_URL,
@@ -60,7 +58,6 @@ app.prepare().then(() => {
     },
   });
 
-  // Make io available globally for webhook routes
   global.io = io;
   io.use((socket, next) => {
     console.log(socket.handshake.auth);

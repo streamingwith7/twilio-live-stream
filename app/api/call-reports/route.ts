@@ -9,7 +9,6 @@ export async function GET(request: NextRequest) {
     const callSid = searchParams.get('callSid');
 
     if (callSid) {
-      // Get specific call report
       const report = await prisma.callReport.findUnique({
         where: { callSid },
       });
@@ -20,7 +19,6 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(report);
     } else {
-      // Get all call reports with pagination
       const page = parseInt(searchParams.get('page') || '1');
       const limit = parseInt(searchParams.get('limit') || '10');
       const skip = (page - 1) * limit;
