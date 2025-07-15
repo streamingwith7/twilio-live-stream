@@ -37,18 +37,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }, { status: 400 });
     }
 
-    const wsUrl = baseURL.replace('https://', 'wss://').replace('http://', 'ws://')
-    
-    const stream = await client.calls(callSid).streams.create({
-      url: `${wsUrl}/api/twilio/media-stream`,
+    await client.calls(callSid).transcriptions.create({
+      name: `transcription_${callSid}`,
       track: 'both_tracks',
-      name: `enhanced_stream_${Date.now()}`,
-      statusCallback: `${baseURL}/api/twilio/stream-status`,
-      statusCallbackMethod: 'POST',
-      "parameter1.name": 'enable_speaker_separation',
-      "parameter1.value": 'true',
-      "parameter2.name": 'track_participants',
-      "parameter2.value": 'both'
+      statusCallbackUrl: `${baseURL}/api/twilio/transcription-webhook`,
+      statusCallbackMethod: 'POST'
     });
 
     const callDetails: CallDetails = {
@@ -60,21 +53,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({
       success: true,
       originalCallSid: callSid,
-      streamSid: stream.sid,
-      streamName: stream.name,
-      streamingEnabled: true,
-      features: {
-        speakerIdentification: true,
-        sentenceBuilding: true,
-        dualTrackProcessing: true,
-        realTimeTranscription: true
-      },
-      audioCapture: {
-        bothSides: true,
-        separateTracks: true,
-        transparent: true,
-        explanation: "Media stream captures both participants on separate tracks for speaker identification",
-      },
       callDetails,
     }, { status: 200 });
 

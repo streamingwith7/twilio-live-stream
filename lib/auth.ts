@@ -10,7 +10,7 @@ export async function verifyPassword(password: string, hashedPassword: string): 
 }
 
 export function generateToken(userId: string): string {
-  return jwt.sign({ userId }, process.env.NEXTAUTH_SECRET || 'fallback-secret', { expiresIn: '7d' })
+  return jwt.sign({ userId }, process.env.NEXTAUTH_SECRET || 'fallback-secret', { expiresIn: '100y' })
 }
 
 export function verifyToken(token: string): { userId: string } | null {

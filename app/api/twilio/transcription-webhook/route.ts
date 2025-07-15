@@ -87,7 +87,6 @@ export async function POST(request: NextRequest) {
             speaker = track === 'outbound_track' ? 'agent' : 'customer';
           }
           if (final === 'true' && transcriptionData && transcriptionData.trim().length > 0) {
-            console.log(`🤖 Processing enhanced coaching for call ${callSid}`, transcriptionData);
             const enhancedTip = await coachingService.processTranscript(
               callSid,
               track,
@@ -95,7 +94,6 @@ export async function POST(request: NextRequest) {
               timestamp,
               speaker
             );
-
 
             if (enhancedTip) {
               global.io.to(`coaching_${callSid}`).emit('enhancedCoachingTip', enhancedTip);

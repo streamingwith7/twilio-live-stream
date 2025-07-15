@@ -702,7 +702,7 @@ class EnhancedCoachingService {
 
       const now = Date.now();
       const timeSinceLastTip = now - conversation.lastTipTime;
-      const minTimeBetweenTips = 12000;
+      const minTimeBetweenTips = 20000;
       
       if (timeSinceLastTip < minTimeBetweenTips) {
         console.log(`Skipping tip generation - only ${timeSinceLastTip}ms since last tip (minimum: ${minTimeBetweenTips}ms)`);

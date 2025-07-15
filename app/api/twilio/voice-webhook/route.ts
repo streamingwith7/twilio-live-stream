@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
           <Client>user_3</Client>`
       }
 
-    twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
           <Start>
             <Transcription 
@@ -156,7 +156,6 @@ export async function POST(request: NextRequest) {
               profanityFilter="false"
             />
           </Start>
-          <Say voice="alice">You have reached Close My Deals. Connecting you to an agent now.</Say>
           <Dial timeout="20" 
                 record="record-from-answer" 
                 recordingStatusCallback="${baseUrl}/api/twilio/recording-status"
@@ -176,7 +175,6 @@ ${clientDialXML}
           <Say voice="alice">Thank you for your message. We will get back to you soon. Goodbye.</Say>
           <Hangup />
         </Response>`
-
     console.log('📝 Returning incoming call TwiML')
   }
 
