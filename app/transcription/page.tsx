@@ -6,6 +6,8 @@ import { io, Socket } from 'socket.io-client'
 import { User } from '@/types'
 import Navigation from '@/components/Navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
+import RealTimeCoaching from '@/components/RealTimeCoaching'
+import CallStrategyWidget from '@/components/CallStrategyWidget'
 import { formatDirection } from '@/utils/callUtils'
 
 interface TranscriptMessage {
@@ -58,11 +60,17 @@ export default function TranscriptionPage() {
   const [socketStatus, setSocketStatus] = useState<'connecting' | 'connected' | 'disconnected' | 'reconnecting'>('connecting')
   const [heartbeatInterval, setHeartbeatInterval] = useState<NodeJS.Timeout | null>(null)
   const [isStoppingStream, setIsStoppingStream] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const router = useRouter()
   const searchParams = useSearchParams()
   const callSid = searchParams.get('callSid')
   const phoneNumber = searchParams.get('phone')
+
+  const handleError = (errorMessage: string) => {
+    setError(errorMessage)
+    setTimeout(() => setError(null), 5000)
+  }
 
   const startTranscription = async () => {
     if (!callSid) return
@@ -485,93 +493,122 @@ export default function TranscriptionPage() {
             </div>
           )}
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Live Transcription</h3>
-                <div className="flex items-center space-x-4 text-sm text-gray-600">
-                  <span>Complete sentences: {completeSentences.length}</span>
-                  <span>Last update: {completeSentences.length > 0 ? formatTimestamp(completeSentences[completeSentences.length - 1].timestamp) : 'None'}</span>
-                  {streamActive && (
-                    <div className="flex items-center">
-                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
-                      LIVE
+          {error && (
+            <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg flex items-center">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {error}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">Live Transcription</h3>
+                    <div className="flex items-center space-x-4 text-sm text-gray-600">
+                      <span>Complete sentences: {completeSentences.length}</span>
+                      <span>Last update: {completeSentences.length > 0 ? formatTimestamp(completeSentences[completeSentences.length - 1].timestamp) : 'None'}</span>
+                      {streamActive && (
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
+                          LIVE
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {!streamActive && !isStartingStream && completeSentences.length === 0 && (
+                    <div className="text-center py-16">
+                      <svg className="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                      </svg>
+                      <h3 className="text-xl font-medium text-gray-900 mb-2">Initializing Transcription</h3>
+                      <p className="text-gray-500">
+                        Setting up real-time speech-to-text for this call...
+                      </p>
+                    </div>
+                  )}
+
+                  {(streamActive || completeSentences.length > 0) && (
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                      {completeSentences.map((sentence) => (
+                        <div key={sentence.id} className="flex items-start space-x-3 p-4 bg-gray-50 rounded-lg">
+                          <div className="flex-shrink-0">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getSpeakerColor(sentence.speaker)}`}>
+                              {getSpeakerLabel(sentence.speaker)}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-900">{sentence.text}</p>
+                            <div className="flex items-center justify-between mt-1">
+                              <p className="text-xs text-gray-500">
+                                {formatTimestamp(sentence.timestamp)}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                Confidence: {Math.round(sentence.confidence * 100)}%
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {(currentSpeakers.inbound) && streamActive && (
+                        <div className="space-y-2">
+                          {currentSpeakers.inbound && (
+                            <div className="flex items-start space-x-3 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400">
+                              <div className="flex-shrink-0">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  Speaker
+                                </span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-gray-900 italic">{currentSpeakers.inbound}</p>
+                                <p className="text-xs text-blue-600 mt-1">Speaking...</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {streamActive && completeSentences.length === 0 && !currentSpeakers.inbound && (
+                        <div className="text-center py-8">
+                          <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg className="w-6 h-6 text-green-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                          </div>
+                          <p className="text-gray-600">Listening for speech...</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="p-6">
-              {!streamActive && !isStartingStream && completeSentences.length === 0 && (
-                <div className="text-center py-16">
-                  <svg className="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                  </svg>
-                  <h3 className="text-xl font-medium text-gray-900 mb-2">Initializing Transcription</h3>
-                  <p className="text-gray-500">
-                    Setting up real-time speech-to-text for this call...
-                  </p>
-                </div>
-              )}
-
-              {(streamActive || completeSentences.length > 0) && (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {completeSentences.map((sentence) => (
-                    <div key={sentence.id} className="flex items-start space-x-3 p-4 bg-gray-50 rounded-lg">
-                      <div className="flex-shrink-0">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getSpeakerColor(sentence.speaker)}`}>
-                          {getSpeakerLabel(sentence.speaker)}
-                        </span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900">{sentence.text}</p>
-                        <div className="flex items-center justify-between mt-1">
-                          <p className="text-xs text-gray-500">
-                            {formatTimestamp(sentence.timestamp)}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            Confidence: {Math.round(sentence.confidence * 100)}%
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {(currentSpeakers.inbound) && streamActive && (
-                    <div className="space-y-2">
-                      {currentSpeakers.inbound && (
-                        <div className="flex items-start space-x-3 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400">
-                          <div className="flex-shrink-0">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              Speaker
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-900 italic">{currentSpeakers.inbound}</p>
-                            <p className="text-xs text-blue-600 mt-1">Speaking...</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {streamActive && completeSentences.length === 0 && !currentSpeakers.inbound && (
-                    <div className="text-center py-8">
-                      <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-6 h-6 text-green-600 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                        </svg>
-                      </div>
-                      <p className="text-gray-600">Listening for speech...</p>
-                    </div>
-                  )}
-                </div>
-              )}
+            {/* Call Strategy Panel - Takes up 1/3 of the space */}
+            <div className="lg:col-span-1">
+              <CallStrategyWidget 
+                callSid={callSid || undefined}
+                isCallActive={streamActive}
+                onError={handleError}
+              />
             </div>
           </div>
         </div>
       </main>
+
+      {/* Real-time Coaching Modal */}
+      <RealTimeCoaching 
+        callSid={callSid || undefined}
+        isCallActive={streamActive}
+        onError={handleError}
+      />
     </div>
   )
 }
