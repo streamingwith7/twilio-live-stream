@@ -318,6 +318,162 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
       return null;
     }
   }
+
+  async analyzeTipUsage(conversationTurns: any[], tipHistory: any[]): Promise<any[]> {
+    try {
+      if (!tipHistory || tipHistory.length === 0) {
+        return [];
+      }
+
+      const agentTurns = conversationTurns
+        .filter(turn => turn.speaker === 'agent')
+        .map(turn => `${turn.timestamp}: "${turn.text}"`);
+
+      const prompt = `Analyze the following agent conversation turns and determine which of the provided coaching tips were actually used or implemented by the agent.
+
+AGENT CONVERSATION TURNS:
+${agentTurns.join('\n')}
+
+COACHING TIPS PROVIDED:
+${tipHistory.map((tip, index) => `
+Tip ${index + 1}:
+- ID: ${tip.id}
+- Suggestion: ${tip.tip}
+- Suggested Script: ${tip.suggestedScript}
+- Timestamp: ${tip.timestamp}
+`).join('\n')}
+
+For each tip, determine if the agent used or implemented the suggestion based on:
+1. Similar phrasing or concepts in agent responses
+2. Following the suggested script (even if not word-for-word)
+3. Implementing the strategic advice in subsequent turns
+4. Addressing the specific concern mentioned in the tip
+
+Provide ONLY this JSON format (no markdown, no code blocks):
+{
+  "analyzedTips": [
+    {
+      "id": "tip_id_here",
+      "isUsed": true/false,
+      "matchingTurns": ["relevant agent responses that show usage"],
+    }
+  ]
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { 
+            role: "system", 
+            content: "You are an expert conversation analyst. Analyze coaching tip usage with high accuracy." 
+          },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.3,
+        max_tokens: 1500,
+        response_format: { type: "json_object" }
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) return tipHistory;
+
+      const analysis = this.parseJsonResponse(content);
+      
+      return tipHistory.map(tip => {
+        const analyzedTip = analysis.analyzedTips?.find((a: any) => a.id === tip.id);
+        return {
+          ...tip,
+          isUsed: analyzedTip?.isUsed || false,
+          matchingTurns: analyzedTip?.matchingTurns || []
+        };
+      });
+    } catch (error) {
+      console.error('Error analyzing tip usage:', error);
+      return tipHistory.map(tip => ({
+        ...tip,
+        isUsed: false,
+        usageConfidence: 0,
+        matchingTurns: []
+      }));
+    }
+  }
+
+  async analyzeChunkedTipUsage(conversationTurns: any[], tipHistory: any[], chunkSizeMinutes: number = 5): Promise<any[]> {
+    try {
+      if (!conversationTurns || conversationTurns.length === 0 || !tipHistory || tipHistory.length === 0) {
+        return tipHistory.map(tip => ({
+          ...tip,
+          isUsed: false,
+          usageConfidence: 0,
+          matchingTurns: []
+        }));
+      }
+
+      const chunkSizeMs = chunkSizeMinutes * 60 * 1000;
+      
+      const firstTurnTime = new Date(conversationTurns[0].timestamp).getTime();
+      
+      const chunks: any[][] = [];
+      
+      for (const turn of conversationTurns) {
+        const turnTime = new Date(turn.timestamp).getTime();
+        const timeSinceStart = turnTime - firstTurnTime;
+        const chunkIndex = Math.floor(timeSinceStart / chunkSizeMs);
+        
+        while (chunks.length <= chunkIndex) {
+          chunks.push([] as any[]);
+        }
+        
+        chunks[chunkIndex].push(turn);
+      }
+
+      let updatedTips = tipHistory.map(tip => ({
+        ...tip,
+        isUsed: false,
+        usageConfidence: 0,
+        matchingTurns: []
+      }));
+
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        if (chunk.length === 0) continue;
+
+        console.log(`Analyzing chunk ${i + 1}/${chunks.length} (${chunk.length} turns)`);
+        
+        const chunkStartTime = new Date(chunk[0].timestamp).getTime();
+        const chunkEndTime = new Date(chunk[chunk.length - 1].timestamp).getTime(); 
+        
+        const relevantTips = updatedTips.filter(tip => {
+          const tipTime = new Date(tip.timestamp).getTime();
+          return tipTime >= chunkStartTime - 30000 && tipTime <= chunkEndTime + 30000;
+        });
+
+        if (relevantTips.length > 0) {
+          const chunkAnalysis = await this.analyzeTipUsage(chunk, relevantTips);
+          
+          chunkAnalysis.forEach(analyzedTip => {
+            const tipIndex = updatedTips.findIndex(t => t.id === analyzedTip.id);
+            if (tipIndex !== -1) {
+              updatedTips[tipIndex] = {
+                ...updatedTips[tipIndex],
+                isUsed: analyzedTip.isUsed || updatedTips[tipIndex].isUsed,
+                matchingTurns: [...(updatedTips[tipIndex].matchingTurns || []), ...(analyzedTip.matchingTurns || [])]
+              };
+            }
+          });
+        }
+      }
+
+      return updatedTips;
+    } catch (error) {
+      console.error('Error in chunked tip usage analysis:', error);
+      return tipHistory.map(tip => ({
+        ...tip,
+        isUsed: false,
+        matchingTurns: []
+      }));
+    }
+  }
 }
 
 export const openaiService = new EnhancedOpenAIService();

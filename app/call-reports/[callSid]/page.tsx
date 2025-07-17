@@ -7,13 +7,47 @@ import { User } from '@/types'
 import Navigation from '@/components/Navigation'
 import LoadingSpinner from '@/components/LoadingSpinner'
 
-interface Turn {
-  agent?: string
-  customer?: string
-  tip?: string
-  isUsed?: boolean
+interface ConversationTurn {
+  text: string
+  intent: string
+  speaker: "agent" | "customer"
+  sentiment: string
   timestamp: string
-  usedTimestamp?: string
+  confidence: number
+}
+
+interface TipHistoryItem {
+  id: string
+  tip: string
+  isUsed: boolean
+  callSid: string
+  urgency: string
+  reasoning: string
+  timestamp: string
+  matchingTurns: string[]
+  usageReasoning: string
+  suggestedScript: string
+  usageConfidence: number
+  conversationStage: string
+  comments?: TipComment[]
+}
+
+interface TipComment {
+  id: string
+  text: string
+  timestamp: string
+  author: string
+}
+
+interface NewReportData {
+  turns: ConversationTurn[]
+  tipHistory: TipHistoryItem[]
+}
+
+interface MergedItem {
+  type: 'conversation' | 'tip'
+  timestamp: string
+  data: ConversationTurn | TipHistoryItem
 }
 
 interface FeedbackData {
@@ -66,9 +100,7 @@ interface CallReport {
   toNumber?: string
   recordingUrl?: string
   duration?: number
-  reportData?: {
-    turns: Turn[]
-  }
+  reportData?: NewReportData
   feedback?: FeedbackData
   totalTurns: number
   totalTips: number
@@ -85,6 +117,9 @@ export default function CallReportDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'conversation' | 'feedback'>('conversation')
+  const [commentText, setCommentText] = useState('')
+  const [isAddingComment, setIsAddingComment] = useState(false)
+  const [activeCommentTip, setActiveCommentTip] = useState<string | null>(null)
   const conversationRef = useRef<HTMLDivElement>(null)
   const turnRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
@@ -141,28 +176,65 @@ export default function CallReportDetailPage() {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
-  const scrollToUsedTimestamp = (usedTimestamp: string) => {
-    if (!report?.reportData?.turns) return
+  const mergeConversationAndTips = (): MergedItem[] => {
+    if (!report?.reportData) return []
 
-    // Find the turn that matches the usedTimestamp
-    const targetTurnIndex = report.reportData.turns.findIndex(turn => 
-      turn.timestamp === usedTimestamp && (turn.agent || turn.customer)
-    )
+    const { turns, tipHistory } = report.reportData
+    const merged: MergedItem[] = []
 
-    if (targetTurnIndex !== -1) {
-      const targetElement = turnRefs.current[`turn-${targetTurnIndex}`]
+    turns.forEach(turn => {
+      merged.push({
+        type: 'conversation',
+        timestamp: turn.timestamp,
+        data: turn
+      })
+    })
+
+    tipHistory.forEach(tip => {
+      merged.push({
+        type: 'tip',
+        timestamp: tip.timestamp,
+        data: tip
+      })
+    })
+
+    merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+
+    return merged
+  }
+
+  const scrollToMatchingTurn = (matchingTurns: string[]) => {
+    if (!report?.reportData?.turns || matchingTurns.length === 0) return
+
+    const mergedItems = mergeConversationAndTips()
+    let conversationTurnCounter = 0
+    let targetRefKey: string | null = null
+
+    for (let i = 0; i < mergedItems.length; i++) {
+      const item = mergedItems[i]
+      if (item.type === 'conversation') {
+        const turn = item.data as ConversationTurn
+        const currentTurnIndex = conversationTurnCounter
+        conversationTurnCounter++
+
+        if (matchingTurns.some(matchingText => 
+          turn.text.trim().toLowerCase().includes(matchingText.trim().toLowerCase()) ||
+          matchingText.trim().toLowerCase().includes(turn.text.trim().toLowerCase())
+        )) {
+          targetRefKey = `turn-${currentTurnIndex}`
+          break
+        }
+      }
+    }
+
+    if (targetRefKey) {
+      const targetElement = turnRefs.current[targetRefKey]
       if (targetElement && conversationRef.current) {
-        // Scroll the conversation container to the target element
-        const containerRect = conversationRef.current.getBoundingClientRect()
-        const elementRect = targetElement.getBoundingClientRect()
-        const scrollTop = conversationRef.current.scrollTop + elementRect.top - containerRect.top - 100 // 100px offset for better visibility
-
-        conversationRef.current.scrollTo({
-          top: scrollTop,
-          behavior: 'smooth'
+        targetElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
         })
 
-        // Add a temporary highlight effect
         targetElement.classList.add('ring-2', 'ring-blue-400', 'ring-opacity-75')
         setTimeout(() => {
           targetElement.classList.remove('ring-2', 'ring-blue-400', 'ring-opacity-75')
@@ -246,23 +318,93 @@ export default function CallReportDetailPage() {
     router.push('/')
   }
 
-  const renderConversationTab = () => (
-    <div ref={conversationRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
-      {report?.reportData?.turns?.length && report.reportData.turns.length > 0 ? (
-        report.reportData.turns.map((turn, index) => {
-          console.log('Processing turn:', turn)
+  const handleAddComment = async (tipId: string) => {
+    if (!commentText.trim()) return
 
-          if (turn.customer && !turn.agent && !turn.tip) {
+    setIsAddingComment(true)
+    try {
+      const response = await fetch('/api/call-reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          callSid,
+          tipId,
+          comment: commentText.trim(),
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        
+        // Update the report state with the new comment
+        setReport(prev => {
+          if (!prev || !prev.reportData) return prev
+          
+          const updatedReportData = { ...prev.reportData } as NewReportData
+          if (updatedReportData.tipHistory) {
+            const tipIndex = updatedReportData.tipHistory.findIndex(tip => tip.id === tipId)
+            if (tipIndex !== -1) {
+              if (!updatedReportData.tipHistory[tipIndex].comments) {
+                updatedReportData.tipHistory[tipIndex].comments = []
+              }
+              updatedReportData.tipHistory[tipIndex].comments!.push(result.comment)
+            }
+          }
+          
+          return {
+            ...prev,
+            reportData: updatedReportData
+          }
+        })
+
+        setCommentText('')
+        setActiveCommentTip(null)
+      } else {
+        console.error('Failed to add comment')
+      }
+    } catch (error) {
+      console.error('Error adding comment:', error)
+    } finally {
+      setIsAddingComment(false)
+    }
+  }
+
+  const startAddingComment = (tipId: string) => {
+    setActiveCommentTip(tipId)
+    setCommentText('')
+  }
+
+  const cancelAddingComment = () => {
+    setActiveCommentTip(null)
+    setCommentText('')
+  }
+
+  const renderConversationTab = () => {
+    const mergedItems = mergeConversationAndTips()
+    let conversationTurnCounter = 0
+
+    return (
+    <div ref={conversationRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
+        {mergedItems.length > 0 ? (
+          mergedItems.map((item, index) => {
+            if (item.type === 'conversation') {
+              const turn = item.data as ConversationTurn
+              const currentTurnIndex = conversationTurnCounter
+              conversationTurnCounter++
+
+              if (turn.speaker === 'customer') {
             return (
               <div 
                 key={`customer-${index}`} 
-                ref={el => { turnRefs.current[`turn-${index}`] = el }}
+                    ref={el => { turnRefs.current[`turn-${currentTurnIndex}`] = el }}
                 className="flex justify-start transition-all duration-200 rounded-lg"
               >
                 <div className="flex items-end space-x-3 max-w-md">
                   {getAvatar('customer')}
                   <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
-                    <p className="text-sm whitespace-pre-wrap">{turn.customer}</p>
+                        <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
                     <p className="text-xs mt-2 text-gray-500">
                       {formatTimestamp(turn.timestamp)}
                     </p>
@@ -270,19 +412,17 @@ export default function CallReportDetailPage() {
                 </div>
               </div>
             )
-          }
-
-          if (turn.agent && !turn.tip) {
+              } else if (turn.speaker === 'agent') {
             return (
               <div 
                 key={`agent-${index}`} 
-                ref={el => { turnRefs.current[`turn-${index}`] = el }}
+                    ref={el => { turnRefs.current[`turn-${currentTurnIndex}`] = el }}
                 className="flex justify-end transition-all duration-200 rounded-lg"
               >
                 <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
                   {getAvatar('agent')}
                   <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
-                    <p className="text-sm whitespace-pre-wrap">{turn.agent}</p>
+                        <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
                     <p className="text-xs mt-2 text-gray-500">
                       {formatTimestamp(turn.timestamp)}
                     </p>
@@ -291,41 +431,43 @@ export default function CallReportDetailPage() {
               </div>
             )
           }
-
-          if (turn.tip) {
+            } else if (item.type === 'tip') {
+              const tip = item.data as TipHistoryItem
             return (
               <div key={`tip-${index}`} className="flex justify-end">
                 <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
                   {getAvatar('tip')}
                   <div 
-                    className="bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl px-4 py-3 shadow-lg cursor-pointer hover:from-green-600 hover:to-green-700 transition-all duration-200"
-                    onClick={() => turn.usedTimestamp && scrollToUsedTimestamp(turn.usedTimestamp)}
+                      className={`bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl px-4 py-3 shadow-lg transition-all duration-200 ${
+                        tip.isUsed ? 'cursor-pointer hover:from-green-600 hover:to-green-700' : ''
+                      }`}
+                      onClick={() => tip.isUsed && scrollToMatchingTurn(tip.matchingTurns)}
                   >
                     <div className="flex items-center space-x-2 mb-2">
                       <span className="text-xs font-medium text-green-100">AI Coach</span>
                       <span className="text-xs text-green-200">
-                        {formatTimestamp(turn.timestamp)}
+                          {formatTimestamp(tip.timestamp)}
                       </span>
                     </div>
-                    <p className="text-sm text-white">{turn.tip}</p>
+                      <p className="text-sm text-white">{tip.tip}</p>
                     
-                    {/* Show used timestamp if available */}
-                    {turn.usedTimestamp && (
+                      {/* Show suggested script if available */}
+                      {tip.suggestedScript && (
                       <div className="mt-2 pt-2 border-t border-green-400 border-opacity-30">
-                        <p className="text-xs text-green-200">
-                          Applied at: {formatTimestamp(turn.usedTimestamp)}
+                          <p className="text-xs text-green-200 italic">
+                            {tip.suggestedScript}
                         </p>
                       </div>
                     )}
 
                     <div className="flex items-center justify-center mt-3">
-                      {turn.isUsed ? (
+                        {tip.isUsed ? (
                         <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
                           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                           </svg>
                           <span>Used</span>
-                          {turn.usedTimestamp && (
+                            {tip.matchingTurns.length > 0 && (
                             <span className="text-green-300">• Click to view</span>
                           )}
                         </span>
@@ -338,13 +480,75 @@ export default function CallReportDetailPage() {
                         </span>
                       )}
                     </div>
+
+                    <div className="mt-3 pt-3 border-t border-green-400 border-opacity-30">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-xs text-green-200 flex items-center space-x-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                          <span>Comments ({tip.comments?.length || 0})</span>
+                        </div>
+                        <button
+                          onClick={() => startAddingComment(tip.id)}
+                          className="text-xs text-green-200 hover:text-white flex items-center space-x-1"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                          <span className="font-bold">Add Comment</span>
+                        </button>
+                      </div>
+
+                      {tip.comments && tip.comments.length > 0 && (
+                        <div className="space-y-2 mb-3">
+                          {tip.comments.map((comment) => (
+                            <div key={comment.id} className="bg-green-900 bg-opacity-20 rounded-lg p-2">
+                              <p className="text-xs text-green-100">{comment.text}</p>
+                              <div className="flex items-center justify-between mt-1">
+                                <span className="text-xs text-green-300">{comment.author}</span>
+                                <span className="text-xs text-green-300">
+                                  {new Date(comment.timestamp).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {activeCommentTip === tip.id && (
+                        <div className="mt-2">
+                          <textarea
+                            value={commentText}
+                            onChange={(e) => setCommentText(e.target.value)}
+                            placeholder="Add a comment about this tip..."
+                            className="w-full p-2 text-sm bg-green-900 bg-opacity-20 border border-green-400 border-opacity-30 rounded-lg text-green-100 placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-green-300"
+                            rows={3}
+                          />
+                          <div className="flex justify-end space-x-2 mt-2">
+                            <button
+                              onClick={cancelAddingComment}
+                              className="px-3 py-1 text-xs text-green-200 hover:text-white"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleAddComment(tip.id)}
+                              disabled={!commentText.trim() || isAddingComment}
+                              className="px-3 py-1 text-xs bg-green-700 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                            >
+                              {isAddingComment ? 'Adding...' : 'Add Comment'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             )
           }
 
-          // Handle any other cases
           return null
         })
       ) : (
@@ -360,6 +564,7 @@ export default function CallReportDetailPage() {
       )}
     </div>
   )
+  }
 
   const renderFeedbackTab = () => {
     const feedback = report?.feedback

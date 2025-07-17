@@ -423,6 +423,48 @@ class EnhancedCoachingService {
     };
   }
 
+  async generateReportWithTipUsage(
+    callSid: string,
+  ): Promise<{ turns: ConversationTurn[], tipHistory: SimpleCoachingTip[] } | null> {
+    const conversation = this.tracker.getConversation(callSid);
+    if (!conversation) {
+      console.log('No conversation found for report generation:', callSid);
+      return null;
+    }
+    
+    const { turns, tipHistory } = conversation;
+    
+    if (!tipHistory || tipHistory.length === 0) {
+      console.log('No tips to analyze for callSid:', callSid);
+      return {
+        turns,
+        tipHistory: []
+      };
+    }
+
+    console.log(`Analyzing tip usage for ${tipHistory.length} tips in call ${callSid}`);
+    
+    const callDuration = Date.now() - conversation.callStartTime;
+    const callDurationMinutes = callDuration / (1000 * 60);
+    
+    let analyzedTips;
+    
+    if (callDurationMinutes > 10) {
+      console.log(`Long conversation detected (${callDurationMinutes.toFixed(1)} minutes). Using chunked analysis.`);
+      analyzedTips = await openaiService.analyzeChunkedTipUsage(turns, tipHistory, 5);
+    } else {
+      console.log(`Short conversation (${callDurationMinutes.toFixed(1)} minutes). Using regular analysis.`);
+      analyzedTips = await openaiService.analyzeTipUsage(turns, tipHistory);
+    }
+
+    console.log(`Tip usage analysis complete. ${analyzedTips.filter(tip => tip.isUsed).length}/${analyzedTips.length} tips marked as used.`);
+    
+    return {
+      turns,
+      tipHistory: analyzedTips
+    };
+  }
+
   async generateCallFeedback(callSid: string): Promise<any> {
     const conversation = this.tracker.getConversation(callSid);
     if (!conversation) {
@@ -571,7 +613,7 @@ class EnhancedCoachingService {
 
       const now = Date.now();
       const timeSinceLastTip = now - conversation.lastTipTime;
-      const minTimeBetweenTips = 20000;
+      const minTimeBetweenTips = 15000;
       
       if (timeSinceLastTip < minTimeBetweenTips) {
         console.log(`Skipping tip generation - only ${timeSinceLastTip}ms since last tip (minimum: ${minTimeBetweenTips}ms)`);
@@ -580,6 +622,8 @@ class EnhancedCoachingService {
 
       const tip = await this.generateEnhancedTip(callSid, conversation);
       
+      console.log('generated Tip ------>', tip);
+
       const existingTip = conversation.tipHistory.find((t: SimpleCoachingTip) => t.tip === tip?.tip || t.suggestedScript === tip?.suggestedScript);
 
       if (tip && !existingTip && tip.tip !== 'SAME' && tip.suggestedScript !== 'SAME') {

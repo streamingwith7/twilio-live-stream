@@ -154,10 +154,10 @@ export async function POST(request: NextRequest) {
 
       case 'transcription-stopped':
         console.log('🛑 Enhanced transcription stopped for call:', callSid)
-        const report = await coachingService.generateReport(callSid);
+        const report = await coachingService.generateReportWithTipUsage(callSid);
         const finalSummary = coachingService.generateCallSummary(callSid);
         const feedback = await coachingService.generateCallFeedback(callSid);
-
+        console.log(report);
         if (report) {
           try {
             const { prisma } = require('@/lib/prisma');
@@ -190,6 +190,10 @@ export async function POST(request: NextRequest) {
               console.warn('⚠️ Could not fetch call details from Twilio:', twilioError.message);
             }
             
+            // Calculate tip usage statistics
+            const totalTips = report.tipHistory.length;
+            const usedTips = report.tipHistory.filter((tip: any) => tip.isUsed).length;
+            
             await prisma.callReport.create({
               data: {
                 callSid,
@@ -201,11 +205,12 @@ export async function POST(request: NextRequest) {
                 direction,
                 feedback,
                 totalTurns: report.turns.length,
-                totalTips: report.tipHistory.length
+                totalTips: totalTips,
+                usedTips: usedTips
               }
             });
             
-            console.log('✅ Call report saved to database for call:', callSid);
+            console.log(`✅ Call report saved to database for call: ${callSid} (${usedTips}/${totalTips} tips used)`);
           } catch (error) {
             console.error('❌ Error saving call report to database:', error);
           }
