@@ -39,15 +39,26 @@ interface TipComment {
   author: string
 }
 
+interface UserSuggestion {
+  id: string
+  suggestion: string
+  reasoning: string
+  timestamp: string
+  author: string
+  conversationTurnIndex: number
+  comments?: TipComment[]
+}
+
 interface NewReportData {
   turns: ConversationTurn[]
   tipHistory: TipHistoryItem[]
+  userSuggestions?: UserSuggestion[]
 }
 
 interface MergedItem {
-  type: 'conversation' | 'tip'
+  type: 'conversation' | 'tip' | 'userSuggestion'
   timestamp: string
-  data: ConversationTurn | TipHistoryItem
+  data: ConversationTurn | TipHistoryItem | UserSuggestion
 }
 
 interface FeedbackData {
@@ -120,6 +131,10 @@ export default function CallReportDetailPage() {
   const [commentText, setCommentText] = useState('')
   const [isAddingComment, setIsAddingComment] = useState(false)
   const [activeCommentTip, setActiveCommentTip] = useState<string | null>(null)
+  const [isAddingSuggestion, setIsAddingSuggestion] = useState(false)
+  const [activeAddSuggestionTurn, setActiveAddSuggestionTurn] = useState<number | null>(null)
+  const [suggestionText, setSuggestionText] = useState('')
+  const [suggestionReasoning, setSuggestionReasoning] = useState('')
   const conversationRef = useRef<HTMLDivElement>(null)
   const turnRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
@@ -179,7 +194,7 @@ export default function CallReportDetailPage() {
   const mergeConversationAndTips = (): MergedItem[] => {
     if (!report?.reportData) return []
 
-    const { turns, tipHistory } = report.reportData
+    const { turns, tipHistory, userSuggestions } = report.reportData
     const merged: MergedItem[] = []
 
     turns.forEach(turn => {
@@ -197,6 +212,16 @@ export default function CallReportDetailPage() {
         data: tip
       })
     })
+
+    if (userSuggestions) {
+      userSuggestions.forEach(suggestion => {
+        merged.push({
+          type: 'userSuggestion',
+          timestamp: suggestion.timestamp,
+          data: suggestion
+        })
+      })
+    }
 
     merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
@@ -284,6 +309,19 @@ export default function CallReportDetailPage() {
             </div>
           </div>
         )
+      case 'userSuggestion':
+        return (
+          <div className="relative">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-400 via-purple-500 to-purple-600 rounded-full flex items-center justify-center shadow-xl border-3 border-white ring-2 ring-purple-200 transform hover:scale-105 transition-transform duration-200">
+              <svg className="w-6 h-6 text-white drop-shadow-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 3v1m0 0l1.5 1.5M12 4L10.5 5.5M21 12h-1M4 12H3m15.364-6.364l-.707.707M6.343 6.343l-.707.707m12.728 0l-.707-.707M6.343 17.657l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-purple-500 border-2 border-white rounded-full flex items-center justify-center">
+              <span className="text-xs font-bold text-white">U</span>
+            </div>
+          </div>
+        )
       default:
         return (
           <div className="relative">
@@ -343,6 +381,8 @@ export default function CallReportDetailPage() {
           if (!prev || !prev.reportData) return prev
           
           const updatedReportData = { ...prev.reportData } as NewReportData
+          
+          // Try to find in tips first
           if (updatedReportData.tipHistory) {
             const tipIndex = updatedReportData.tipHistory.findIndex(tip => tip.id === tipId)
             if (tipIndex !== -1) {
@@ -350,6 +390,22 @@ export default function CallReportDetailPage() {
                 updatedReportData.tipHistory[tipIndex].comments = []
               }
               updatedReportData.tipHistory[tipIndex].comments!.push(result.comment)
+              
+              return {
+                ...prev,
+                reportData: updatedReportData
+              }
+            }
+          }
+          
+          // If not found in tips, try user suggestions
+          if (updatedReportData.userSuggestions) {
+            const suggestionIndex = updatedReportData.userSuggestions.findIndex(suggestion => suggestion.id === tipId)
+            if (suggestionIndex !== -1) {
+              if (!updatedReportData.userSuggestions[suggestionIndex].comments) {
+                updatedReportData.userSuggestions[suggestionIndex].comments = []
+              }
+              updatedReportData.userSuggestions[suggestionIndex].comments!.push(result.comment)
             }
           }
           
@@ -381,6 +437,70 @@ export default function CallReportDetailPage() {
     setCommentText('')
   }
 
+  const handleAddUserSuggestion = async (conversationTurnIndex: number) => {
+    if (!suggestionText.trim() || !suggestionReasoning.trim()) return
+
+    setIsAddingSuggestion(true)
+    try {
+      const response = await fetch('/api/call-reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          callSid,
+          userSuggestion: {
+            suggestion: suggestionText.trim(),
+            reasoning: suggestionReasoning.trim(),
+            conversationTurnIndex,
+          },
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        
+        // Update the report state with the new user suggestion
+        setReport(prev => {
+          if (!prev || !prev.reportData) return prev
+          
+          const updatedReportData = { ...prev.reportData } as NewReportData
+          if (!updatedReportData.userSuggestions) {
+            updatedReportData.userSuggestions = []
+          }
+          updatedReportData.userSuggestions.push(result.userSuggestion)
+          
+          return {
+            ...prev,
+            reportData: updatedReportData
+          }
+        })
+
+        setSuggestionText('')
+        setSuggestionReasoning('')
+        setActiveAddSuggestionTurn(null)
+      } else {
+        console.error('Failed to add user suggestion')
+      }
+    } catch (error) {
+      console.error('Error adding user suggestion:', error)
+    } finally {
+      setIsAddingSuggestion(false)
+    }
+  }
+
+  const startAddingSuggestion = (conversationTurnIndex: number) => {
+    setActiveAddSuggestionTurn(conversationTurnIndex)
+    setSuggestionText('')
+    setSuggestionReasoning('')
+  }
+
+  const cancelAddingSuggestion = () => {
+    setActiveAddSuggestionTurn(null)
+    setSuggestionText('')
+    setSuggestionReasoning('')
+  }
+
   const renderConversationTab = () => {
     const mergedItems = mergeConversationAndTips()
     let conversationTurnCounter = 0
@@ -395,41 +515,163 @@ export default function CallReportDetailPage() {
               conversationTurnCounter++
 
               if (turn.speaker === 'customer') {
-            return (
-              <div 
-                key={`customer-${index}`} 
-                    ref={el => { turnRefs.current[`turn-${currentTurnIndex}`] = el }}
-                className="flex justify-start transition-all duration-200 rounded-lg"
-              >
-                <div className="flex items-end space-x-3 max-w-md">
-                  {getAvatar('customer')}
-                  <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
-                        <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
-                    <p className="text-xs mt-2 text-gray-500">
-                      {formatTimestamp(turn.timestamp)}
-                    </p>
+                return (
+                  <div key={`customer-${index}`}>
+                    <div 
+                      ref={el => { turnRefs.current[`turn-${currentTurnIndex}`] = el }}
+                      className="flex justify-start transition-all duration-200 rounded-lg"
+                    >
+                      <div className="flex items-end space-x-3 max-w-md">
+                        {getAvatar('customer')}
+                        <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
+                          <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
+                          <p className="text-xs mt-2 text-gray-500">
+                            {formatTimestamp(turn.timestamp)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-center mt-4 mb-2">
+                      <button
+                        onClick={() => startAddingSuggestion(currentTurnIndex)}
+                        className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm rounded-lg transition-colors flex items-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span>Add Suggestion</span>
+                      </button>
+                    </div>
+
+                    {activeAddSuggestionTurn === currentTurnIndex && (
+                      <div className="max-w-md mx-auto mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <h4 className="text-sm font-medium text-purple-900 mb-3">Add Your Suggestion</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-purple-700 mb-1">
+                              Suggestion
+                            </label>
+                            <textarea
+                              value={suggestionText}
+                              onChange={(e) => setSuggestionText(e.target.value)}
+                              placeholder="What should have been suggested here?"
+                              className="w-full p-2 text-sm border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              rows={3}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-purple-700 mb-1">
+                              Reasoning
+                            </label>
+                            <textarea
+                              value={suggestionReasoning}
+                              onChange={(e) => setSuggestionReasoning(e.target.value)}
+                              placeholder="Why should this have been suggested?"
+                              className="w-full p-2 text-sm border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              rows={2}
+                            />
+                          </div>
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              onClick={cancelAddingSuggestion}
+                              className="px-3 py-2 text-sm text-purple-600 hover:text-purple-800"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleAddUserSuggestion(currentTurnIndex)}
+                              disabled={!suggestionText.trim() || !suggestionReasoning.trim() || isAddingSuggestion}
+                              className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                            >
+                              {isAddingSuggestion ? 'Adding...' : 'Add Suggestion'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
-            )
+                )
               } else if (turn.speaker === 'agent') {
-            return (
-              <div 
-                key={`agent-${index}`} 
-                    ref={el => { turnRefs.current[`turn-${currentTurnIndex}`] = el }}
-                className="flex justify-end transition-all duration-200 rounded-lg"
-              >
-                <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
-                  {getAvatar('agent')}
-                  <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
-                        <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
-                    <p className="text-xs mt-2 text-gray-500">
-                      {formatTimestamp(turn.timestamp)}
-                    </p>
+                return (
+                  <div key={`agent-${index}`}>
+                    <div 
+                      ref={el => { turnRefs.current[`turn-${currentTurnIndex}`] = el }}
+                      className="flex justify-end transition-all duration-200 rounded-lg"
+                    >
+                      <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
+                        {getAvatar('agent')}
+                        <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
+                          <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
+                          <p className="text-xs mt-2 text-gray-500">
+                            {formatTimestamp(turn.timestamp)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Add Suggestion Button */}
+                    <div className="flex justify-center mt-4 mb-2">
+                      <button
+                        onClick={() => startAddingSuggestion(currentTurnIndex)}
+                        className="px-4 py-2 bg-purple-100 hover:bg-purple-200 text-purple-700 text-sm rounded-lg transition-colors flex items-center space-x-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span>Add Suggestion</span>
+                      </button>
+                    </div>
+
+                    {/* Add Suggestion Form */}
+                    {activeAddSuggestionTurn === currentTurnIndex && (
+                      <div className="max-w-md mx-auto mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <h4 className="text-sm font-medium text-purple-900 mb-3">Add Your Suggestion</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs font-medium text-purple-700 mb-1">
+                              Suggestion
+                            </label>
+                            <textarea
+                              value={suggestionText}
+                              onChange={(e) => setSuggestionText(e.target.value)}
+                              placeholder="What should have been suggested here?"
+                              className="w-full p-2 text-sm border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              rows={3}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-purple-700 mb-1">
+                              Reasoning
+                            </label>
+                            <textarea
+                              value={suggestionReasoning}
+                              onChange={(e) => setSuggestionReasoning(e.target.value)}
+                              placeholder="Why should this have been suggested?"
+                              className="w-full p-2 text-sm border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              rows={2}
+                            />
+                          </div>
+                          <div className="flex justify-end space-x-2">
+                            <button
+                              onClick={cancelAddingSuggestion}
+                              className="px-3 py-2 text-sm text-purple-600 hover:text-purple-800"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => handleAddUserSuggestion(currentTurnIndex)}
+                              disabled={!suggestionText.trim() || !suggestionReasoning.trim() || isAddingSuggestion}
+                              className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                            >
+                              {isAddingSuggestion ? 'Adding...' : 'Add Suggestion'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
-            )
+                )
           }
             } else if (item.type === 'tip') {
               const tip = item.data as TipHistoryItem
@@ -547,7 +789,98 @@ export default function CallReportDetailPage() {
                 </div>
               </div>
             )
-          }
+            } else if (item.type === 'userSuggestion') {
+              const suggestion = item.data as UserSuggestion
+              return (
+                <div key={`userSuggestion-${index}`} className="flex justify-end">
+                  <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
+                    {getAvatar('userSuggestion')}
+                    <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-2xl px-4 py-3 shadow-lg transition-all duration-200">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <span className="text-xs font-medium text-purple-100">User Suggestion</span>
+                        <span className="text-xs text-purple-200">
+                          {formatTimestamp(suggestion.timestamp)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-white">{suggestion.suggestion}</p>
+                      
+                      {/* Show reasoning */}
+                      {suggestion.reasoning && (
+                        <div className="mt-2 pt-2 border-t border-purple-400 border-opacity-30">
+                          <p className="text-xs text-purple-200">
+                            <span className="font-medium">Reasoning:</span> {suggestion.reasoning}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Comments Section for User Suggestions */}
+                      <div className="mt-3 pt-3 border-t border-purple-400 border-opacity-30">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs text-purple-200 flex items-center space-x-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            <span>Comments ({suggestion.comments?.length || 0})</span>
+                          </div>
+                          <button
+                            onClick={() => startAddingComment(suggestion.id)}
+                            className="text-xs text-purple-200 hover:text-white flex items-center space-x-1"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            <span className="font-bold">Add Comment</span>
+                          </button>
+                        </div>
+
+                        {suggestion.comments && suggestion.comments.length > 0 && (
+                          <div className="space-y-2 mb-3">
+                            {suggestion.comments.map((comment) => (
+                              <div key={comment.id} className="bg-purple-900 bg-opacity-20 rounded-lg p-2">
+                                <p className="text-xs text-purple-100">{comment.text}</p>
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className="text-xs text-purple-300">{comment.author}</span>
+                                  <span className="text-xs text-purple-300">
+                                    {new Date(comment.timestamp).toLocaleString()}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {activeCommentTip === suggestion.id && (
+                          <div className="mt-2">
+                            <textarea
+                              value={commentText}
+                              onChange={(e) => setCommentText(e.target.value)}
+                              placeholder="Add a comment about this suggestion..."
+                              className="w-full p-2 text-sm bg-purple-900 bg-opacity-20 border border-purple-400 border-opacity-30 rounded-lg text-purple-100 placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-300"
+                              rows={3}
+                            />
+                            <div className="flex justify-end space-x-2 mt-2">
+                              <button
+                                onClick={cancelAddingComment}
+                                className="px-3 py-1 text-xs text-purple-200 hover:text-white"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleAddComment(suggestion.id)}
+                                disabled={!commentText.trim() || isAddingComment}
+                                className="px-3 py-1 text-xs bg-purple-700 text-white rounded hover:bg-purple-600 disabled:opacity-50"
+                              >
+                                {isAddingComment ? 'Adding...' : 'Add Comment'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            }
 
           return null
         })
