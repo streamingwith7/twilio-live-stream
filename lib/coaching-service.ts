@@ -1,4 +1,5 @@
 import { openaiService } from '@/lib/openai-service'
+import { Conversation } from 'twilio/lib/twiml/VoiceResponse';
 
 interface ConversationTurn {
   speaker: 'agent' | 'customer';
@@ -7,10 +8,6 @@ interface ConversationTurn {
   sentiment?: 'positive' | 'negative' | 'neutral';
   intent?: string;
   confidence?: number;
-}
-
-interface CallReport {
-  turns: TurnWithTip[];
 }
 
 interface TurnWithTip {
@@ -98,7 +95,6 @@ class EnhancedConversationTracker {
 
     const wasCustomerSpeaking = conversation.lastSpeaker === 'customer';
     const isCustomerSpeaking = speaker === 'customer';
-    console.log(speaker, '--------------->', text);
     conversation.customerJustFinishedSpeaking = (wasCustomerSpeaking && !isCustomerSpeaking) || 
                                                  (conversation.lastSpeaker === undefined && !isCustomerSpeaking && conversation.turns.some(t => t.speaker === 'customer'));
     conversation.lastSpeaker = speaker;
@@ -114,11 +110,7 @@ class EnhancedConversationTracker {
 
     conversation.turns.push(turn);
     this.updateAnalytics(callSid, turn);
-    
-    // Check if we should generate an incremental report (fire and forget)
-    this.checkForIncrementalReport(callSid, speaker).catch(error => {
-      console.error('Error in incremental report generation:', error);
-    });
+
   }
 
   private analyzeSentiment(text: string): 'positive' | 'negative' | 'neutral' {
@@ -398,83 +390,12 @@ class EnhancedConversationTracker {
     }
   }
 
-  async checkForIncrementalReport(callSid: string, currentSpeaker: 'agent' | 'customer') {
-    const conversation = this.conversations.get(callSid);
-    if (!conversation) return;
-
-    const { turns, lastReportTurnCount } = conversation;
-    const currentTurnCount = turns.length;
-    
-    // Generate report every 10 turns, but only if the current turn is from agent
-    // This ensures we can see if the agent used the previous tip
-    if (currentSpeaker === 'agent' && 
-        currentTurnCount >= lastReportTurnCount + 10 && 
-        currentTurnCount > 10) {
-      
-      try {
-        const incrementalReport = await this.generateIncrementalReport(callSid, lastReportTurnCount, currentTurnCount);
-        if (incrementalReport) {
-          conversation.incrementalReports.push(incrementalReport);
-          conversation.lastReportTurnCount = currentTurnCount;
-        }
-      } catch (error) {
-        console.error('Error generating incremental report:', error);
-      }
-    }
-  }
-
-  private async generateIncrementalReport(callSid: string, startIndex: number, endIndex: number): Promise<IncrementalReport | null> {
-    const conversation = this.conversations.get(callSid);
-    if (!conversation) return null;
-
-    const { turns, tipHistory } = conversation;
-    
-    // Get the turns for this incremental report
-    const reportTurns = turns.slice(startIndex, endIndex);
-    
-    // Get tips that were generated during this period
-    const reportTips = tipHistory.filter(tip => {
-      const tipTime = new Date(tip.timestamp).getTime();
-      const startTime = new Date(reportTurns[0]?.timestamp || Date.now()).getTime();
-      const endTime = new Date(reportTurns[reportTurns.length - 1]?.timestamp || Date.now()).getTime();
-      return tipTime >= startTime && tipTime <= endTime;
-    });
-
-    try {
-      const detailedReport = await openaiService.generateDetailedCallReport(reportTurns, reportTips);
-      if (detailedReport) {
-        return {
-          startTurnIndex: startIndex,
-          endTurnIndex: endIndex,
-          turns: detailedReport,
-          timestamp: new Date().toISOString()
-        };
-      }
-    } catch (error) {
-      console.error('Error generating incremental report:', error);
-    }
-    
-    return null;
-  }
-
-  getIncrementalReports(callSid: string): IncrementalReport[] {
-    const conversation = this.conversations.get(callSid);
-    return conversation?.incrementalReports || [];
-  }
-
   getConversation(callSid: string) {
     return this.conversations.get(callSid);
   }
 
   endCall(callSid: string) {
     console.log('🛑 endCall: Ending conversation for callSid:', callSid);
-    const conversation = this.conversations.get(callSid);
-    if (conversation) {
-      console.log(`📊 endCall: Final analytics for ${callSid}:`, conversation.analytics);
-      console.log(`📝 endCall: Final turn count for ${callSid}:`, conversation.turns.length);
-    } else {
-      console.log(`⚠️ endCall: No conversation found to end for callSid:`, callSid);
-    }
     this.conversations.delete(callSid);
     console.log('🗑️ endCall: Deleted conversation for callSid:', callSid);
   }
@@ -489,61 +410,17 @@ class EnhancedCoachingService {
 
   async generateReport(
     callSid: string,
-  ): Promise<CallReport | null> {
+  ): Promise<{ turns: ConversationTurn[], tipHistory: SimpleCoachingTip[] } | null> {
     const conversation = this.tracker.getConversation(callSid);
-    console.log('conversation', conversation);
     if (!conversation) {
       Array.from((this.tracker as any).conversations.keys());
       return null;
     }
     
-    const { turns, tipHistory, lastReportTurnCount } = conversation;
-    const incrementalReports = this.tracker.getIncrementalReports(callSid);
-    
-    const allTurns: TurnWithTip[] = [];
-    
-    incrementalReports.forEach(report => {
-      allTurns.push(...report.turns);
-    });
-    
-    if (lastReportTurnCount < turns.length) {
-      console.log(`📊 Generating final report for remaining turns ${lastReportTurnCount + 1}-${turns.length}`);
-      
-      const remainingTurns = turns.slice(lastReportTurnCount);
-      const remainingTips = tipHistory.filter(tip => {
-        const tipTime = new Date(tip.timestamp).getTime();
-        const startTime = new Date(remainingTurns[0]?.timestamp || Date.now()).getTime();
-        const endTime = new Date(remainingTurns[remainingTurns.length - 1]?.timestamp || Date.now()).getTime();
-        return tipTime >= startTime && tipTime <= endTime;
-      });
-      
-      try {
-        const finalReport = await openaiService.generateDetailedCallReport(remainingTurns, remainingTips);
-        if (finalReport) {
-          allTurns.push(...finalReport);
-        }
-      } catch (error) {
-        console.error('Error generating final report:', error);
-      }
-    }
-    
-    if (allTurns.length > 0) {
-      const callReport: CallReport = {
-        turns: allTurns
-      };
-      return callReport;
-    }
-    
-    console.log('⚠️ No incremental reports found, falling back to full conversation analysis');
-    const detailedReport = await openaiService.generateDetailedCallReport(turns, tipHistory);
-    if (detailedReport) {
-      const callReport: CallReport = {
-        turns: detailedReport
-      };
-      return callReport;
-    }
-    
-    return null;
+    return {
+      turns: conversation.turns,
+      tipHistory: conversation.tipHistory
+    };
   }
 
   async generateCallFeedback(callSid: string): Promise<any> {
@@ -595,13 +472,11 @@ class EnhancedCoachingService {
       const { PrismaClient } = require('@prisma/client');
       const prisma = new PrismaClient();
 
-      // Check if call report already exists
       const existingReport = await prisma.callReport.findUnique({
         where: { callSid }
       });
 
       if (existingReport) {
-        // Update existing report with feedback
         await prisma.callReport.update({
           where: { callSid },
           data: {
@@ -613,7 +488,6 @@ class EnhancedCoachingService {
           }
         });
       } else {
-        // Create new report with feedback
         await prisma.callReport.create({
           data: {
             callSid,
@@ -638,13 +512,9 @@ class EnhancedCoachingService {
 
   async endCallWithFeedback(callSid: string): Promise<any> {
     try {
-      console.log('🔄 Generating call feedback for callSid:', callSid);
-      
-      // Generate feedback
       const feedbackData = await this.generateCallFeedback(callSid);
       
       if (feedbackData) {
-        // Save to database
         const saved = await this.saveCallFeedbackToDatabase(callSid, feedbackData);
         
         if (saved) {
@@ -656,7 +526,6 @@ class EnhancedCoachingService {
         console.log('⚠️ No feedback data generated for callSid:', callSid);
       }
 
-      // End the call in tracker
       this.tracker.endCall(callSid);
       
       return feedbackData;
@@ -711,7 +580,9 @@ class EnhancedCoachingService {
 
       const tip = await this.generateEnhancedTip(callSid, conversation);
       
-      if (tip) {
+      const existingTip = conversation.tipHistory.find((t: SimpleCoachingTip) => t.tip === tip?.tip || t.suggestedScript === tip?.suggestedScript);
+
+      if (tip && !existingTip && tip.tip !== 'SAME' && tip.suggestedScript !== 'SAME') {
         conversation.lastTipTime = Date.now();
         conversation.tipHistory.push(tip);
         return tip;
@@ -785,10 +656,6 @@ class EnhancedCoachingService {
   getCallAnalytics(callSid: string) {
     const conversation = this.tracker.getConversation(callSid);
     return conversation?.analytics;
-  }
-
-  getIncrementalReports(callSid: string) {
-    return this.tracker.getIncrementalReports(callSid);
   }
 
   getIncrementalReportStatus(callSid: string) {

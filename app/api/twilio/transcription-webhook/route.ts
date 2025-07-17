@@ -87,6 +87,9 @@ export async function POST(request: NextRequest) {
             speaker = track === 'outbound_track' ? 'agent' : 'customer';
           }
           if (final === 'true' && transcriptionData && transcriptionData.trim().length > 0) {
+
+            console.log(speaker, '---------->', transcriptionData);
+
             const enhancedTip = await coachingService.processTranscript(
               callSid,
               track,
@@ -155,7 +158,7 @@ export async function POST(request: NextRequest) {
         const finalSummary = coachingService.generateCallSummary(callSid);
         const feedback = await coachingService.generateCallFeedback(callSid);
 
-        if (report && report.turns) {
+        if (report) {
           try {
             const { prisma } = require('@/lib/prisma');
             const twilio = require('twilio');
@@ -187,10 +190,6 @@ export async function POST(request: NextRequest) {
               console.warn('⚠️ Could not fetch call details from Twilio:', twilioError.message);
             }
             
-            const totalTurns = report.turns.length;
-            const totalTips = report.turns.filter((turn: any) => turn.tip).length;
-            const usedTips = report.turns.filter((turn: any) => turn.tip && turn.tip.isUsed).length;
-            
             await prisma.callReport.create({
               data: {
                 callSid,
@@ -199,11 +198,10 @@ export async function POST(request: NextRequest) {
                 recordingUrl,
                 duration,
                 reportData: report,
-                totalTurns,
-                totalTips,
-                usedTips,
                 direction,
-                feedback
+                feedback,
+                totalTurns: report.turns.length,
+                totalTips: report.tipHistory.length
               }
             });
             
@@ -318,10 +316,6 @@ export async function GET(request: NextRequest) {
       case 'incremental-status':
         const status = coachingService.getIncrementalReportStatus(callSid);
         return NextResponse.json({ callSid, status });
-
-      case 'incremental-reports':
-        const reports = coachingService.getIncrementalReports(callSid);
-        return NextResponse.json({ callSid, reports });
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
