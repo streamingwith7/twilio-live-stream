@@ -235,15 +235,6 @@ export default function PromptManagementPage() {
                 <h2 className="text-3xl font-bold text-gray-900">Prompt Management</h2>
                 <p className="mt-2 text-gray-600">Manage AI prompts for the coaching system</p>
               </div>
-              <button
-                onClick={handleCreateNew}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                <span>New Prompt</span>
-              </button>
             </div>
           </div>
 
@@ -254,39 +245,7 @@ export default function PromptManagementPage() {
           )}
 
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-            {/* Filters */}
-            <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-              <div className="flex flex-wrap gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                  <select
-                    value={filterType}
-                    onChange={(e) => setFilterType(e.target.value)}
-                    className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-                  >
-                    <option value="">All Types</option>
-                    {PROMPT_TYPES.map(type => (
-                      <option key={type} value={type}>{type.replace('_', ' ')}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select
-                    value={filterActive}
-                    onChange={(e) => setFilterActive(e.target.value)}
-                    className="border border-gray-300 rounded-md px-3 py-2 text-sm"
-                  >
-                    <option value="">All Status</option>
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
             <div className="flex">
-              {/* Prompts List */}
               <div className="w-1/3 border-r border-gray-200">
                 <div className="p-4">
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Prompts ({prompts.length})</h3>
@@ -349,88 +308,14 @@ export default function PromptManagementPage() {
                     </div>
 
                     <div className="space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Key</label>
-                          <input
-                            type="text"
-                            value={formData.key}
-                            onChange={(e) => setFormData({ ...formData, key: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="e.g., salesCoach"
-                            disabled={!isCreating}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                          <input
-                            type="text"
-                            value={formData.name}
-                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                            placeholder="e.g., Sales Coach"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                          <select
-                            value={formData.type}
-                            onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          >
-                            {PROMPT_TYPES.map(type => (
-                              <option key={type} value={type}>{type.replace('_', ' ')}</option>
-                            ))}
-                          </select>
-                        </div>
-                        {/* <div className="flex items-center">
-                          <label className="flex items-center">
-                            <input
-                              type="checkbox"
-                              checked={formData.isActive}
-                              onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                              className="mr-2"
-                            />
-                            <span className="text-sm font-medium text-gray-700">Active</span>
-                          </label>
-                        </div> */}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                        <textarea
-                          value={formData.description}
-                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                          rows={2}
-                          placeholder="Brief description of what this prompt does..."
-                        />
-                      </div>
-
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
                         <textarea
                           value={formData.content}
                           onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-sm"
-                          rows={15}
+                          rows={100}
                           placeholder="Enter the prompt content..."
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Variables (JSON format, optional)
-                        </label>
-                        <textarea
-                          value={formData.variables}
-                          onChange={(e) => setFormData({ ...formData, variables: e.target.value })}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-sm"
-                          rows={5}
-                          placeholder='{"key": "value"}'
                         />
                       </div>
                     </div>
