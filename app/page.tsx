@@ -291,14 +291,14 @@ export default function Home() {
                         }}
                       >
                         <option value="" className="bg-gray-900 text-white">
-                          Select Department (Optional)
+                          Select Department
                         </option>
                         <option value="Sales" className="bg-gray-900 text-white">
                           Sales
                         </option>
                         <option value="Marketing" className="bg-gray-900 text-white">
                           Marketing
-                        </option>
+                        </option> 
                         <option value="Business Development" className="bg-gray-900 text-white">
                           Business Development
                         </option>
