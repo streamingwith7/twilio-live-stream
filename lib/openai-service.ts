@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-const { SALES_COACHING_PROMPTS, PROMPT_HELPERS } = require('./prompts-store');
+import { promptService } from './prompt-service';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -19,6 +19,80 @@ export interface ConversationContext {
 }
 
 class EnhancedOpenAIService {
+  private cachedPrompts: {
+    salesCoach?: string;
+    sentimentAnalyzer?: string;
+    stageDetector?: string;
+    callFeedback?: string;
+    promptHelpers?: any;
+    coachingRules?: any;
+  } = {};
+  
+  private promptsLoaded: boolean = false;
+
+  async initializePrompts(): Promise<void> {
+    try {
+      const [
+        salesCoachPrompt,
+        sentimentPrompt,
+        stageDetectorPrompt,
+        feedbackPrompt,
+        promptHelpers,
+        coachingRules
+      ] = await Promise.all([
+        promptService.getPromptContent('salesCoach'),
+        promptService.getPromptContent('sentimentAnalyzer'),
+        promptService.getPromptContent('stageDetector'),
+        promptService.getPromptContent('callFeedback'),
+        promptService.getPromptHelpers(),
+        promptService.getCoachingRules()
+      ]);
+
+      this.cachedPrompts = {
+        salesCoach: salesCoachPrompt || undefined,
+        sentimentAnalyzer: sentimentPrompt || undefined,
+        stageDetector: stageDetectorPrompt || undefined,
+        callFeedback: feedbackPrompt || undefined,
+        promptHelpers,
+        coachingRules
+      };
+
+      this.promptsLoaded = true;
+      console.log('Prompts successfully cached for this transcription session');
+    } catch (error) {
+      console.error('Error initializing prompts:', error);
+      // Fallback to fetching on-demand if initialization fails
+      this.promptsLoaded = false;
+    }
+  }
+
+  // Get cached prompts or fetch on-demand as fallback
+  private async getPrompts() {
+    if (!this.promptsLoaded) {
+      console.warn('Prompts not preloaded, fetching on-demand');
+      await this.initializePrompts();
+    }
+    return this.cachedPrompts;
+  }
+
+  // Clear cached prompts to free memory after call ends
+  clearCachedPrompts(): void {
+    this.cachedPrompts = {};
+    this.promptsLoaded = false;
+    console.log('🗑️ Cleared cached prompts from memory');
+  }
+
+  // Force refresh of cached prompts (useful when prompts are updated in database)
+  async refreshPrompts(): Promise<void> {
+    console.log('🔄 Refreshing cached prompts...');
+    this.clearCachedPrompts();
+    await this.initializePrompts();
+  }
+
+  // Check if prompts are currently loaded
+  arePromptsLoaded(): boolean {
+    return this.promptsLoaded;
+  }
 
   private parseJsonResponse(content: string): any {
     if (!content) {
@@ -36,7 +110,13 @@ class EnhancedOpenAIService {
 
   async generateCoachingTip(context: ConversationContext): Promise<any> {
     try {
-      const prompt = PROMPT_HELPERS.buildCoachingContext(
+      const prompts = await this.getPrompts();
+
+      if (!prompts.promptHelpers || !prompts.salesCoach) {
+        throw new Error('Required prompts not found in cache');
+      }
+
+      const prompt = prompts.promptHelpers.buildCoachingContext(
         context.fullConversation || '', 
         context.analytics, 
         context.recentCustomerText || '',
@@ -46,7 +126,7 @@ class EnhancedOpenAIService {
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: SALES_COACHING_PROMPTS.salesCoach },
+          { role: "system", content: prompts.salesCoach },
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
@@ -65,12 +145,19 @@ class EnhancedOpenAIService {
 
   async analyzeSentiment(text: string, speaker: 'agent' | 'customer'): Promise<any> {
     try {
-      const prompt = PROMPT_HELPERS.buildSentimentContext(text, speaker);
+      const prompts = await this.getPrompts();
+
+      if (!prompts.promptHelpers || !prompts.sentimentAnalyzer) {
+        console.error('Required prompts not found in cache');
+        return null;
+      }
+
+      const prompt = prompts.promptHelpers.buildSentimentContext(text, speaker);
       
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
-          { role: "system", content: SALES_COACHING_PROMPTS.sentimentAnalyzer },
+          { role: "system", content: prompts.sentimentAnalyzer },
           { role: "user", content: prompt }
         ],
         temperature: 0.3,
@@ -273,12 +360,18 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
     try {
       const { conversationHistory, fullConversation, analytics, tipHistory } = context;
       
+      const prompts = await this.getPrompts();
+      
+      if (!prompts.callFeedback) {
+        throw new Error('Call feedback prompt not found in cache');
+      }
+
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
           { 
             role: "system", 
-            content: SALES_COACHING_PROMPTS.callFeedback 
+            content: prompts.callFeedback 
           },
           { 
             role: "user", 

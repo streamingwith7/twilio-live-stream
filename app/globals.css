@@ -16,6 +16,11 @@
   }
 }
 
+input, textarea, select {
+  color: black !important;
+  background-color: white !important;
+}
+
 body {
   color: rgb(var(--foreground-rgb));
   background: linear-gradient(

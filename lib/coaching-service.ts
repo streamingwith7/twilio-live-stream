@@ -65,6 +65,14 @@ class EnhancedConversationTracker {
 
   initializeCall(callSid: string, customerData?: any) {
     console.log('🚀 initializeCall: Initializing conversation for callSid:', callSid);
+    
+    // Initialize prompts for this call session to avoid latency during tip generation
+    openaiService.initializePrompts().then(() => {
+      console.log('✅ Prompts preloaded for call:', callSid);
+    }).catch((error) => {
+      console.error('❌ Failed to preload prompts for call:', callSid, error);
+    });
+
     this.conversations.set(callSid, {
       turns: [],
       analytics: {
@@ -396,6 +404,10 @@ class EnhancedConversationTracker {
 
   endCall(callSid: string) {
     console.log('🛑 endCall: Ending conversation for callSid:', callSid);
+    
+    // Clear cached prompts to free memory
+    openaiService.clearCachedPrompts();
+    
     this.conversations.delete(callSid);
     console.log('🗑️ endCall: Deleted conversation for callSid:', callSid);
   }

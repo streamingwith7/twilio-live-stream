@@ -190,7 +190,6 @@ export async function POST(request: NextRequest) {
               console.warn('⚠️ Could not fetch call details from Twilio:', twilioError.message);
             }
             
-            // Calculate tip usage statistics
             const totalTips = report.tipHistory.length;
             const usedTips = report.tipHistory.filter((tip: any) => tip.isUsed).length;
             

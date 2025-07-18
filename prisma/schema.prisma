@@ -94,3 +94,42 @@ model CallReport {
 
   @@map("call_reports")
 }
+
+model Prompt {
+  id          String      @id @default(cuid())
+  key         String      @unique  // e.g., "salesCoach", "sentimentAnalyzer"
+  name        String                // Human-readable name
+  description String?               // Description of what this prompt does
+  type        PromptType            // Type of prompt
+  content     String      @db.Text  // The actual prompt content
+  variables   Json?                 // JSON object for any variables or settings
+  isActive    Boolean     @default(true)
+  version     Int         @default(1)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  createdBy   String?               // User who created/last modified
+  
+  @@map("prompts")
+}
+
+model PromptVersion {
+  id        String   @id @default(cuid())
+  promptId  String
+  version   Int
+  content   String   @db.Text
+  variables Json?
+  createdAt DateTime @default(now())
+  createdBy String?
+  
+  @@unique([promptId, version])
+  @@map("prompt_versions")
+}
+
+enum PromptType {
+  SALES_COACHING
+  SENTIMENT_ANALYZER
+  STAGE_DETECTOR
+  CALL_FEEDBACK
+  COACHING_RULES
+  PROMPT_HELPERS
+}
