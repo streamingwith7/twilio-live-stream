@@ -18,10 +18,9 @@ export interface Prompt {
 class PromptService {
   private promptCache: Map<string, Prompt> = new Map();
   private cacheExpiration: Map<string, number> = new Map();
-  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private readonly CACHE_TTL = 5 * 60 * 1000;
 
   async getPromptByKey(key: string): Promise<Prompt | null> {
-    // Check cache first
     const cached = this.promptCache.get(key);
     const expiration = this.cacheExpiration.get(key);
     
@@ -38,7 +37,6 @@ class PromptService {
       });
 
       if (prompt) {
-        // Cache the prompt
         this.promptCache.set(key, prompt);
         this.cacheExpiration.set(key, Date.now() + this.CACHE_TTL);
         return prompt;
@@ -100,7 +98,6 @@ class PromptService {
     const helpers = await this.getPromptVariables('promptHelpers');
     if (!helpers) return null;
 
-    // Convert stringified functions back to actual functions
     const promptHelpers: any = {};
     
     if (helpers.buildCoachingContext) {

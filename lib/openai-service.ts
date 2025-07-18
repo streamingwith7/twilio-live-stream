@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { promptService } from './prompt-service';
+import { PROMPT_HELPERS } from './prompts-store';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -61,12 +62,10 @@ class EnhancedOpenAIService {
       console.log('Prompts successfully cached for this transcription session');
     } catch (error) {
       console.error('Error initializing prompts:', error);
-      // Fallback to fetching on-demand if initialization fails
       this.promptsLoaded = false;
     }
   }
 
-  // Get cached prompts or fetch on-demand as fallback
   private async getPrompts() {
     if (!this.promptsLoaded) {
       console.warn('Prompts not preloaded, fetching on-demand');
@@ -75,21 +74,18 @@ class EnhancedOpenAIService {
     return this.cachedPrompts;
   }
 
-  // Clear cached prompts to free memory after call ends
   clearCachedPrompts(): void {
     this.cachedPrompts = {};
     this.promptsLoaded = false;
     console.log('🗑️ Cleared cached prompts from memory');
   }
 
-  // Force refresh of cached prompts (useful when prompts are updated in database)
   async refreshPrompts(): Promise<void> {
     console.log('🔄 Refreshing cached prompts...');
     this.clearCachedPrompts();
     await this.initializePrompts();
   }
 
-  // Check if prompts are currently loaded
   arePromptsLoaded(): boolean {
     return this.promptsLoaded;
   }
@@ -116,12 +112,14 @@ class EnhancedOpenAIService {
         throw new Error('Required prompts not found in cache');
       }
 
-      const prompt = prompts.promptHelpers.buildCoachingContext(
+      const prompt = PROMPT_HELPERS.buildCoachingContext(
         context.fullConversation || '', 
         context.analytics, 
         context.recentCustomerText || '',
         context.previousTips || []
       );
+
+      console.log('prompt----------->', prompt);
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -441,6 +439,8 @@ For each tip, determine if the agent used or implemented the suggestion based on
 2. Following the suggested script (even if not word-for-word)
 3. Implementing the strategic advice in subsequent turns
 4. Addressing the specific concern mentioned in the tip
+
+Important: Since users use tips after they are created, previously ongoing conversations cannot affect the isUsed forum.
 
 Provide ONLY this JSON format (no markdown, no code blocks):
 {

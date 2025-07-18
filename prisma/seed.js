@@ -6,7 +6,6 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding prompts...');
 
-  // Sales Coaching Prompts
   await prisma.prompt.upsert({
     where: { key: 'salesCoach' },
     update: {},
