@@ -125,7 +125,6 @@ class PromptService {
     }
   }
 
-  // Method to refresh cache for specific prompt
   async refreshPromptCache(key: string): Promise<void> {
     this.clearCache(key);
     await this.getPromptByKey(key);

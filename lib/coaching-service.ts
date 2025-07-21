@@ -66,7 +66,6 @@ class EnhancedConversationTracker {
   initializeCall(callSid: string, customerData?: any) {
     console.log('🚀 initializeCall: Initializing conversation for callSid:', callSid);
     
-    // Initialize prompts for this call session to avoid latency during tip generation
     openaiService.initializePrompts().then(() => {
       console.log('✅ Prompts preloaded for call:', callSid);
     }).catch((error) => {
@@ -405,7 +404,6 @@ class EnhancedConversationTracker {
   endCall(callSid: string) {
     console.log('🛑 endCall: Ending conversation for callSid:', callSid);
     
-    // Clear cached prompts to free memory
     openaiService.clearCachedPrompts();
     
     this.conversations.delete(callSid);
@@ -633,11 +631,10 @@ class EnhancedCoachingService {
       }
 
       const tip = await this.generateEnhancedTip(callSid, conversation);
-      
-      console.log('generated Tip ------>', tip);
 
       const existingTip = conversation.tipHistory.find((t: SimpleCoachingTip) => t.tip === tip?.tip || t.suggestedScript === tip?.suggestedScript);
 
+      
       if (tip && !existingTip && tip.tip !== 'SAME' && tip.suggestedScript !== 'SAME') {
         conversation.lastTipTime = Date.now();
         conversation.tipHistory.push(tip);
@@ -655,6 +652,8 @@ class EnhancedCoachingService {
     callSid: string,
     conversation: any
   ): Promise<SimpleCoachingTip | null> {
+
+    console.log('conversation ------>', conversation);
     const { turns, analytics } = conversation;
     const lastCustomerTurn = turns.filter((t: ConversationTurn) => t.speaker === 'customer').slice(-1)[0];
     if (!lastCustomerTurn) {
@@ -679,6 +678,7 @@ class EnhancedCoachingService {
       previousTipCount: conversation.tipHistory?.length || 0
     };
     try {
+
       const tipData = await openaiService.generateCoachingTip({
         conversationHistory: turns,
         fullConversation,
@@ -691,7 +691,7 @@ class EnhancedCoachingService {
           conversationSummary
         }
       });
-      
+
       return {
         id: `tip_${callSid}_${Date.now()}`,
         tip: tipData.tip,

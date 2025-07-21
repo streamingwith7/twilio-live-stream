@@ -59,7 +59,6 @@ class EnhancedOpenAIService {
       };
 
       this.promptsLoaded = true;
-      console.log('Prompts successfully cached for this transcription session');
     } catch (error) {
       console.error('Error initializing prompts:', error);
       this.promptsLoaded = false;
@@ -67,6 +66,7 @@ class EnhancedOpenAIService {
   }
 
   private async getPrompts() {
+
     if (!this.promptsLoaded) {
       console.warn('Prompts not preloaded, fetching on-demand');
       await this.initializePrompts();
@@ -107,8 +107,10 @@ class EnhancedOpenAIService {
   async generateCoachingTip(context: ConversationContext): Promise<any> {
     try {
       const prompts = await this.getPrompts();
-
-      if (!prompts.promptHelpers || !prompts.salesCoach) {
+      console.log('conversation ------>', context.conversationHistory);
+      
+      console.log('previous tips ----------->', context.previousTips);
+      if (!prompts.salesCoach) {
         throw new Error('Required prompts not found in cache');
       }
 
@@ -118,8 +120,6 @@ class EnhancedOpenAIService {
         context.recentCustomerText || '',
         context.previousTips || []
       );
-
-      console.log('prompt----------->', prompt);
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -132,7 +132,6 @@ class EnhancedOpenAIService {
       });
 
       const content = response.choices[0]?.message?.content;
-
       if (!content) throw new Error('No response from OpenAI');
       return this.parseJsonResponse(content);
     } catch (error) {
