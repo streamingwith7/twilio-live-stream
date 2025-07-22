@@ -198,4 +198,31 @@ async function handleUserSuggestion(callSid: string, userSuggestion: any) {
     console.error('Error adding user suggestion:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-} 
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const { callSid, isTrained } = await request.json();
+
+    if (!callSid) {
+      return NextResponse.json({ error: 'Missing callSid' }, { status: 400 });
+    }
+
+    const updatedReport = await prisma.callReport.update({
+      where: { callSid },
+      data: {
+        isTrained: isTrained,
+        updatedAt: new Date(),
+      },
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      report: updatedReport,
+      message: 'Call report updated successfully' 
+    });
+  } catch (error) {
+    console.error('Error updating call report:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}

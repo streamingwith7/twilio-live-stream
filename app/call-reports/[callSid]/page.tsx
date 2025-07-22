@@ -118,6 +118,7 @@ interface CallReport {
   usedTips: number
   createdAt: string
   updatedAt: string
+  isTrained?: boolean
 }
 
 export default function CallReportDetailPage() {
@@ -135,6 +136,7 @@ export default function CallReportDetailPage() {
   const [activeAddSuggestionTurn, setActiveAddSuggestionTurn] = useState<number | null>(null)
   const [suggestionText, setSuggestionText] = useState('')
   const [suggestionReasoning, setSuggestionReasoning] = useState('')
+  const [isTraining, setIsTraining] = useState(false)
   const conversationRef = useRef<HTMLDivElement>(null)
   const turnRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
@@ -499,6 +501,60 @@ export default function CallReportDetailPage() {
     setActiveAddSuggestionTurn(null)
     setSuggestionText('')
     setSuggestionReasoning('')
+  }
+
+  const handleTrainAgent = async () => {
+    if (!report?.reportData) return
+
+    setIsTraining(true)
+    try {
+      // Prepare training content from report data
+      const trainingContent = JSON.stringify({
+        callSid: report.callSid,
+        reportData: report.reportData,
+        feedback: report.feedback,
+        fromNumber: report.fromNumber,
+        toNumber: report.toNumber,
+        duration: report.duration,
+        createdAt: report.createdAt
+      }, null, 2)
+
+      // Upload to Pinecone for training
+      const response = await fetch('/api/assistant/resource', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: trainingContent
+        }),
+      })
+
+      if (response.ok) {
+        // Update the call report to mark as trained
+        const updateResponse = await fetch('/api/call-reports', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            callSid: report.callSid,
+            isTrained: true
+          }),
+        })
+
+        if (updateResponse.ok) {
+          setReport(prev => prev ? { ...prev, isTrained: true } : prev)
+          console.log('Agent successfully trained with call data')
+        }
+      } else {
+        console.error('Failed to train agent')
+      }
+    } catch (error) {
+      console.error('Error training agent:', error)
+    } finally {
+      setIsTraining(false)
+    }
   }
 
   const renderConversationTab = () => {
@@ -1182,8 +1238,15 @@ export default function CallReportDetailPage() {
           <div className="mb-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900">Call Report Details</h2>
-                <p className="mt-2 text-gray-600">Call SID: {report.callSid}</p>
+                <div className="flex items-center space-x-3 mb-2">
+                  <h2 className="text-3xl font-bold text-gray-900">Call Report Details</h2>
+                  {report.isTrained && (
+                    <span className="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+                      Trained
+                    </span>
+                  )}
+                </div>
+                <p className="text-gray-600">Call SID: {report.callSid}</p>
 
                 {/* Call Details */}
                 {(report.fromNumber || report.toNumber || report.duration) && (
@@ -1228,12 +1291,36 @@ export default function CallReportDetailPage() {
                   })}
                 </p>
               </div>
-              <Link
-                href="/call-reports"
-                className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                Back to Reports
-              </Link>
+              <div className="flex space-x-3">
+                <button
+                  onClick={handleTrainAgent}
+                  disabled={isTraining}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+                >
+                  {isTraining ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                        <path fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" />
+                      </svg>
+                      <span>Training...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <span>{report?.isTrained ? 'Re-train Agent' : 'Train Agent'}</span>
+                    </>
+                  )}
+                </button>
+                <Link
+                  href="/call-reports"
+                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Back to Reports
+                </Link>
+              </div>
             </div>
           </div>
 

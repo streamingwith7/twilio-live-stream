@@ -91,7 +91,7 @@ model CallReport {
   updatedAt       DateTime          @updatedAt
   direction       String?           
   feedback        Json              
-
+  isTrained       Boolean           @default(false)
   @@map("call_reports")
 }
 
