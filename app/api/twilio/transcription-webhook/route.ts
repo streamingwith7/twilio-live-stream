@@ -88,8 +88,6 @@ export async function POST(request: NextRequest) {
           }
           if (final === 'true' && transcriptionData && transcriptionData.trim().length > 0) {
 
-            console.log(speaker, '---------->', transcriptionData);
-
             const enhancedTip = await coachingService.processTranscript(
               callSid,
               track,
@@ -157,7 +155,6 @@ export async function POST(request: NextRequest) {
         const report = await coachingService.generateReportWithTipUsage(callSid);
         const finalSummary = coachingService.generateCallSummary(callSid);
         const feedback = await coachingService.generateCallFeedback(callSid);
-        console.log(report);
         if (report) {
           try {
             const { prisma } = require('@/lib/prisma');

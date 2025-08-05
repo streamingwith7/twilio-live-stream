@@ -61,6 +61,20 @@ interface MergedItem {
   data: ConversationTurn | TipHistoryItem | UserSuggestion
 }
 
+interface SentimentMoment {
+  timestamp: string
+  sentiment: "positive" | "neutral" | "negative"
+  context: string
+}
+
+interface StageProgression {
+  attempted: boolean
+  score: number
+  maxScore: number
+  percentage: number
+  notes: string
+}
+
 interface FeedbackData {
   scores?: {
     rapport?: number
@@ -74,12 +88,32 @@ interface FeedbackData {
   }
   callType?: string
   totalScore?: number
+  sentimentAnalysis?: {
+    overall: "positive" | "neutral" | "negative"
+    timeline: string
+    keyMoments: SentimentMoment[]
+  }
+  stageProgression?: {
+    setTheStage: StageProgression
+    "Walkthrough-Building-Rapport": StageProgression
+    "DiscoverPersonalMotivation(s)": StageProgression
+    dealKillers: StageProgression
+    Transition: StageProgression
+    "Solution-Offer": StageProgression
+  }
+  strengths?: string[]
+  areasForImprovement?: string[]
+  coachingAdvice?: string[]
   callSummary?: {
     repName?: string
+    sellerName?: string
+    propertyAddress?: string
     offerType?: string
     offerAmount?: string
     closeTimeline?: string
     wasOfferDiscussed?: boolean
+    keyPainPoints?: string[]
+    decisionMakers?: string
     creativeFinancingDetails?: {
       piti?: string
       mortgageBalance?: string
@@ -128,7 +162,7 @@ export default function CallReportDetailPage() {
   const [report, setReport] = useState<CallReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'conversation' | 'feedback'>('conversation')
+  const [activeTab, setActiveTab] = useState<'conversation' | 'feedback' | 'stages'>('conversation')
   const [commentText, setCommentText] = useState('')
   const [isAddingComment, setIsAddingComment] = useState(false)
   const [activeCommentTip, setActiveCommentTip] = useState<string | null>(null)
@@ -244,7 +278,7 @@ export default function CallReportDetailPage() {
         const currentTurnIndex = conversationTurnCounter
         conversationTurnCounter++
 
-        if (matchingTurns.some(matchingText => 
+        if (matchingTurns.some(matchingText =>
           turn.text.trim().toLowerCase().includes(matchingText.trim().toLowerCase()) ||
           matchingText.trim().toLowerCase().includes(turn.text.trim().toLowerCase())
         )) {
@@ -346,6 +380,20 @@ export default function CallReportDetailPage() {
     return 'text-red-600 bg-red-100'
   }
 
+  const getPercentageColor = (percentage: number) => {
+    if (percentage >= 80) return 'text-green-600 bg-green-100'
+    if (percentage >= 60) return 'text-yellow-600 bg-yellow-100'
+    return 'text-red-600 bg-red-100'
+  }
+
+  const getSentimentColor = (sentiment: string) => {
+    switch (sentiment) {
+      case 'positive': return 'text-green-600 bg-green-100'
+      case 'negative': return 'text-red-600 bg-red-100'
+      default: return 'text-yellow-600 bg-yellow-100'
+    }
+  }
+
   const getEvaluationColor = (evaluation: string) => {
     if (evaluation.includes('OK') || evaluation.includes('Partial')) return 'text-yellow-600 bg-yellow-100'
     if (evaluation.includes('Missed') || evaluation.includes('No') || evaluation.includes('Unclear') || evaluation.includes('Vague') || evaluation.includes('Rushed')) return 'text-red-600 bg-red-100'
@@ -377,13 +425,13 @@ export default function CallReportDetailPage() {
 
       if (response.ok) {
         const result = await response.json()
-        
+
         // Update the report state with the new comment
         setReport(prev => {
           if (!prev || !prev.reportData) return prev
-          
+
           const updatedReportData = { ...prev.reportData } as NewReportData
-          
+
           // Try to find in tips first
           if (updatedReportData.tipHistory) {
             const tipIndex = updatedReportData.tipHistory.findIndex(tip => tip.id === tipId)
@@ -392,14 +440,14 @@ export default function CallReportDetailPage() {
                 updatedReportData.tipHistory[tipIndex].comments = []
               }
               updatedReportData.tipHistory[tipIndex].comments!.push(result.comment)
-              
+
               return {
                 ...prev,
                 reportData: updatedReportData
               }
             }
           }
-          
+
           // If not found in tips, try user suggestions
           if (updatedReportData.userSuggestions) {
             const suggestionIndex = updatedReportData.userSuggestions.findIndex(suggestion => suggestion.id === tipId)
@@ -410,7 +458,7 @@ export default function CallReportDetailPage() {
               updatedReportData.userSuggestions[suggestionIndex].comments!.push(result.comment)
             }
           }
-          
+
           return {
             ...prev,
             reportData: updatedReportData
@@ -461,17 +509,17 @@ export default function CallReportDetailPage() {
 
       if (response.ok) {
         const result = await response.json()
-        
+
         // Update the report state with the new user suggestion
         setReport(prev => {
           if (!prev || !prev.reportData) return prev
-          
+
           const updatedReportData = { ...prev.reportData } as NewReportData
           if (!updatedReportData.userSuggestions) {
             updatedReportData.userSuggestions = []
           }
           updatedReportData.userSuggestions.push(result.userSuggestion)
-          
+
           return {
             ...prev,
             reportData: updatedReportData
@@ -562,7 +610,7 @@ export default function CallReportDetailPage() {
     let conversationTurnCounter = 0
 
     return (
-    <div ref={conversationRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
+      <div ref={conversationRef} className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
         {mergedItems.length > 0 ? (
           mergedItems.map((item, index) => {
             if (item.type === 'conversation') {
@@ -573,7 +621,7 @@ export default function CallReportDetailPage() {
               if (turn.speaker === 'customer') {
                 return (
                   <div key={`customer-${index}`}>
-                    <div 
+                    <div
                       ref={el => { turnRefs.current[`turn-${currentTurnIndex}`] = el }}
                       className="flex justify-start transition-all duration-200 rounded-lg"
                     >
@@ -581,13 +629,15 @@ export default function CallReportDetailPage() {
                         {getAvatar('customer')}
                         <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
                           <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
-                          <p className="text-xs mt-2 text-gray-500">
-                            {formatTimestamp(turn.timestamp)}
-                          </p>
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-gray-500">
+                              {formatTimestamp(turn.timestamp)}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex justify-center mt-4 mb-2">
                       <button
                         onClick={() => startAddingSuggestion(currentTurnIndex)}
@@ -651,7 +701,7 @@ export default function CallReportDetailPage() {
               } else if (turn.speaker === 'agent') {
                 return (
                   <div key={`agent-${index}`}>
-                    <div 
+                    <div
                       ref={el => { turnRefs.current[`turn-${currentTurnIndex}`] = el }}
                       className="flex justify-end transition-all duration-200 rounded-lg"
                     >
@@ -659,13 +709,20 @@ export default function CallReportDetailPage() {
                         {getAvatar('agent')}
                         <div className="bg-white text-gray-900 rounded-2xl px-4 py-3 shadow-sm border border-gray-200">
                           <p className="text-sm whitespace-pre-wrap">{turn.text}</p>
-                          <p className="text-xs mt-2 text-gray-500">
-                            {formatTimestamp(turn.timestamp)}
-                          </p>
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-gray-500">
+                              {formatTimestamp(turn.timestamp)}
+                            </p>
+                            {turn.sentiment && (
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${getSentimentColor(turn.sentiment)}`}>
+                                {turn.sentiment}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Add Suggestion Button */}
                     <div className="flex justify-center mt-4 mb-2">
                       <button
@@ -728,123 +785,122 @@ export default function CallReportDetailPage() {
                     )}
                   </div>
                 )
-          }
+              }
             } else if (item.type === 'tip') {
               const tip = item.data as TipHistoryItem
-            return (
-              <div key={`tip-${index}`} className="flex justify-end">
-                <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
-                  {getAvatar('tip')}
-                  <div 
-                      className={`bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl px-4 py-3 shadow-lg transition-all duration-200 ${
-                        tip.isUsed ? 'cursor-pointer hover:from-green-600 hover:to-green-700' : ''
-                      }`}
+              return (
+                <div key={`tip-${index}`} className="flex justify-end">
+                  <div className="flex items-end space-x-3 max-w-md flex-row-reverse space-x-reverse">
+                    {getAvatar('tip')}
+                    <div
+                      className={`bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl px-4 py-3 shadow-lg transition-all duration-200 ${tip.isUsed ? 'cursor-pointer hover:from-green-600 hover:to-green-700' : ''
+                        }`}
                       onClick={() => tip.isUsed && scrollToMatchingTurn(tip.matchingTurns)}
-                  >
-                    <div className="flex items-center space-x-2 mb-2">
-                      <span className="text-xs font-medium text-green-100">AI Coach</span>
-                      <span className="text-xs text-green-200">
+                    >
+                      <div className="flex items-center space-x-2 mb-2">
+                        <span className="text-xs font-medium text-green-100">AI Coach</span>
+                        <span className="text-xs text-green-200">
                           {formatTimestamp(tip.timestamp)}
-                      </span>
-                    </div>
+                        </span>
+                      </div>
                       <p className="text-sm text-white">{tip.tip}</p>
-                    
+
                       {/* Show suggested script if available */}
                       {tip.suggestedScript && (
-                      <div className="mt-2 pt-2 border-t border-green-400 border-opacity-30">
+                        <div className="mt-2 pt-2 border-t border-green-400 border-opacity-30">
                           <p className="text-xs text-green-200 italic">
                             {tip.suggestedScript}
-                        </p>
-                      </div>
-                    )}
+                          </p>
+                        </div>
+                      )}
 
-                    <div className="flex items-center justify-center mt-3">
+                      <div className="flex items-center justify-center mt-3">
                         {tip.isUsed ? (
-                        <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          <span>Used</span>
+                          <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <span>Used</span>
                             {tip.matchingTurns.length > 0 && (
-                            <span className="text-green-300">• Click to view</span>
-                          )}
-                        </span>
-                      ) : (
-                        <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
-                          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
-                          <span>Not Used</span>
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-3 pt-3 border-t border-green-400 border-opacity-30">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-xs text-green-200 flex items-center space-x-1">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                          </svg>
-                          <span>Comments ({tip.comments?.length || 0})</span>
-                        </div>
-                        <button
-                          onClick={() => startAddingComment(tip.id)}
-                          className="text-xs text-green-200 hover:text-white flex items-center space-x-1"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                          </svg>
-                          <span className="font-bold">Add Comment</span>
-                        </button>
+                              <span className="text-green-300">• Click to view</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-green-200 flex items-center space-x-2 bg-green-900 bg-opacity-30 px-2 py-1 rounded-full">
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                            </svg>
+                            <span>Not Used</span>
+                          </span>
+                        )}
                       </div>
 
-                      {tip.comments && tip.comments.length > 0 && (
-                        <div className="space-y-2 mb-3">
-                          {tip.comments.map((comment) => (
-                            <div key={comment.id} className="bg-green-900 bg-opacity-20 rounded-lg p-2">
-                              <p className="text-xs text-green-100">{comment.text}</p>
-                              <div className="flex items-center justify-between mt-1">
-                                <span className="text-xs text-green-300">{comment.author}</span>
-                                <span className="text-xs text-green-300">
-                                  {new Date(comment.timestamp).toLocaleString()}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {activeCommentTip === tip.id && (
-                        <div className="mt-2">
-                          <textarea
-                            value={commentText}
-                            onChange={(e) => setCommentText(e.target.value)}
-                            placeholder="Add a comment about this tip..."
-                            className="w-full p-2 text-sm bg-green-900 bg-opacity-20 border border-green-400 border-opacity-30 rounded-lg text-green-100 placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-green-300"
-                            rows={3}
-                          />
-                          <div className="flex justify-end space-x-2 mt-2">
-                            <button
-                              onClick={cancelAddingComment}
-                              className="px-3 py-1 text-xs text-green-200 hover:text-white"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => handleAddComment(tip.id)}
-                              disabled={!commentText.trim() || isAddingComment}
-                              className="px-3 py-1 text-xs bg-green-700 text-white rounded hover:bg-green-600 disabled:opacity-50"
-                            >
-                              {isAddingComment ? 'Adding...' : 'Add Comment'}
-                            </button>
+                      <div className="mt-3 pt-3 border-t border-green-400 border-opacity-30">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs text-green-200 flex items-center space-x-1">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            <span>Comments ({tip.comments?.length || 0})</span>
                           </div>
+                          <button
+                            onClick={() => startAddingComment(tip.id)}
+                            className="text-xs text-green-200 hover:text-white flex items-center space-x-1"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            <span className="font-bold">Add Comment</span>
+                          </button>
                         </div>
-                      )}
+
+                        {tip.comments && tip.comments.length > 0 && (
+                          <div className="space-y-2 mb-3">
+                            {tip.comments.map((comment) => (
+                              <div key={comment.id} className="bg-green-900 bg-opacity-20 rounded-lg p-2">
+                                <p className="text-xs text-green-100">{comment.text}</p>
+                                <div className="flex items-center justify-between mt-1">
+                                  <span className="text-xs text-green-300">{comment.author}</span>
+                                  <span className="text-xs text-green-300">
+                                    {new Date(comment.timestamp).toLocaleString()}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {activeCommentTip === tip.id && (
+                          <div className="mt-2">
+                            <textarea
+                              value={commentText}
+                              onChange={(e) => setCommentText(e.target.value)}
+                              placeholder="Add a comment about this tip..."
+                              className="w-full p-2 text-sm bg-green-900 bg-opacity-20 border border-green-400 border-opacity-30 rounded-lg text-green-100 placeholder-green-300 focus:outline-none focus:ring-2 focus:ring-green-300"
+                              rows={3}
+                            />
+                            <div className="flex justify-end space-x-2 mt-2">
+                              <button
+                                onClick={cancelAddingComment}
+                                className="px-3 py-1 text-xs text-green-200 hover:text-white"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleAddComment(tip.id)}
+                                disabled={!commentText.trim() || isAddingComment}
+                                className="px-3 py-1 text-xs bg-green-700 text-white rounded hover:bg-green-600 disabled:opacity-50"
+                              >
+                                {isAddingComment ? 'Adding...' : 'Add Comment'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )
+              )
             } else if (item.type === 'userSuggestion') {
               const suggestion = item.data as UserSuggestion
               return (
@@ -859,7 +915,7 @@ export default function CallReportDetailPage() {
                         </span>
                       </div>
                       <p className="text-sm text-white">{suggestion.suggestion}</p>
-                      
+
                       {/* Show reasoning */}
                       {suggestion.reasoning && (
                         <div className="mt-2 pt-2 border-t border-purple-400 border-opacity-30">
@@ -938,21 +994,224 @@ export default function CallReportDetailPage() {
               )
             }
 
-          return null
-        })
-      ) : (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
+            return null
+          })
+        ) : (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No conversation data</h3>
+            <p className="text-gray-500">This call report doesn't contain any conversation data.</p>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No conversation data</h3>
-          <p className="text-gray-500">This call report doesn't contain any conversation data.</p>
+        )}
+      </div>
+    )
+  }
+
+  const renderStagesTab = () => {
+    const feedback = report?.feedback
+    const { stageProgression } = feedback!;
+
+    if (!feedback?.stageProgression) {
+      return (
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No stage data available</h3>
+            <p className="text-gray-500">This call report doesn't contain stage progression data.</p>
+          </div>
         </div>
-      )}
-    </div>
-  )
+      )
+    }
+
+    const stageLabels = {
+      setTheStage: 'Set the Stage',
+      "Walkthrough-Building-Rapport": 'Walkthrough / Building Rapport',
+      "DiscoverPersonalMotivation(s)": 'Discover the Personal Motivation(s) That Will Lead to Action',
+      dealKillers: 'Deal Killer (Risk/Discomfort,Relationships,Time,Competition/Options)',
+      Transition: 'Transition',
+      "Solution-Offer": 'Solution/Offer'
+    }
+
+    return (
+      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Sentiment Analysis */}
+        {feedback.sentimentAnalysis && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Sentiment Analysis</h3>
+            </div>
+
+            <div className="mb-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-600">Overall Sentiment:</span>
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${getSentimentColor(feedback.sentimentAnalysis.overall)}`}>
+                  {feedback.sentimentAnalysis.overall}
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 mt-1">Timeline: {feedback.sentimentAnalysis.timeline}</p>
+            </div>
+
+            {feedback.sentimentAnalysis.keyMoments && feedback.sentimentAnalysis.keyMoments.length > 0 && (
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Key Sentiment Moments</h4>
+                <div className="space-y-3">
+                  {feedback.sentimentAnalysis.keyMoments.map((moment, index) => (
+                    <div key={index} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${getSentimentColor(moment.sentiment)}`}>
+                        {moment.sentiment}
+                      </span>
+                      <div className="flex-1">
+                        <p className="text-sm text-gray-900">{moment.context}</p>
+                        <p className="text-xs text-gray-500 mt-1">{moment.timestamp}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Stage Progression */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center mb-6">
+            <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
+              <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">Stage Progression</h3>
+          </div>
+
+          <div className="space-y-4">
+            {stageProgression ? (["setTheStage", "Walkthrough-Building-Rapport", "DiscoverPersonalMotivation(s)", "dealKillers", "Transition", "Solution-Offer"] as const).map((stageKey) => (
+              <div key={stageKey} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-gray-900">
+                    {stageLabels[stageKey as keyof typeof stageLabels] || stageKey}
+                  </h4>
+                  <div className="flex items-center space-x-3">
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getPercentageColor(stageProgression[stageKey].percentage)}`}>
+                      {stageProgression[stageKey].percentage}%
+                    </span>
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getScoreColor(stageProgression[stageKey].score)}`}>
+                      {stageProgression[stageKey].score}/{stageProgression[stageKey].maxScore}
+                    </span>
+                  </div>
+                </div>
+ 
+                {/* Progress Bar */}
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${stageProgression[stageKey].percentage >= 80 ? 'bg-green-500' :
+                      stageProgression[stageKey].percentage >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                      }`}
+                    style={{ width: `${stageProgression[stageKey].percentage}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-sm">
+                  <span className={`px-2 py-1 rounded ${stageProgression[stageKey].attempted ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {stageProgression[stageKey].attempted ? 'Attempted' : 'Not Attempted'}
+                  </span>
+                </div>
+
+                {stageProgression[stageKey].notes && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm text-gray-700">{stageProgression[stageKey].notes}</p>
+                  </div>
+                )}
+              </div>
+            )) : <></>}
+          </div>
+        </div>
+
+        {/* Strengths */}
+        {feedback.strengths && feedback.strengths.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Strengths</h3>
+            </div>
+            <ul className="space-y-2">
+              {feedback.strengths.map((strength, index) => (
+                <li key={index} className="flex items-start space-x-2">
+                  <svg className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm text-gray-700">{strength}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Areas for Improvement */}
+        {feedback.areasForImprovement && feedback.areasForImprovement.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center mr-3">
+                <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Areas for Improvement</h3>
+            </div>
+            <ul className="space-y-2">
+              {feedback.areasForImprovement.map((area, index) => (
+                <li key={index} className="flex items-start space-x-2">
+                  <svg className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm text-gray-700">{area}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Coaching Advice */}
+        {feedback.coachingAdvice && feedback.coachingAdvice.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center mb-4">
+              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Coaching Advice</h3>
+            </div>
+            <ul className="space-y-2">
+              {feedback.coachingAdvice.map((advice, index) => (
+                <li key={index} className="flex items-start space-x-2">
+                  <svg className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M9.664 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-sm text-gray-700">{advice}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    )
   }
 
   const renderFeedbackTab = () => {
@@ -1074,7 +1333,7 @@ export default function CallReportDetailPage() {
           </div>
         )}
 
-        {/* Call Summary */}
+        {/* Enhanced Call Summary */}
         {feedback.callSummary && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center mb-4">
@@ -1090,6 +1349,18 @@ export default function CallReportDetailPage() {
                 <div>
                   <span className="text-sm font-medium text-gray-600">Rep Name:</span>
                   <p className="text-gray-900">{feedback.callSummary.repName}</p>
+                </div>
+              )}
+              {feedback.callSummary.sellerName && (
+                <div>
+                  <span className="text-sm font-medium text-gray-600">Seller Name:</span>
+                  <p className="text-gray-900">{feedback.callSummary.sellerName}</p>
+                </div>
+              )}
+              {feedback.callSummary.propertyAddress && (
+                <div>
+                  <span className="text-sm font-medium text-gray-600">Property Address:</span>
+                  <p className="text-gray-900">{feedback.callSummary.propertyAddress}</p>
                 </div>
               )}
               {feedback.callSummary.offerType && (
@@ -1110,6 +1381,12 @@ export default function CallReportDetailPage() {
                   <p className="text-gray-900">{feedback.callSummary.closeTimeline}</p>
                 </div>
               )}
+              {feedback.callSummary.decisionMakers && (
+                <div>
+                  <span className="text-sm font-medium text-gray-600">Decision Makers:</span>
+                  <p className="text-gray-900">{feedback.callSummary.decisionMakers}</p>
+                </div>
+              )}
               {feedback.callSummary.wasOfferDiscussed !== undefined && (
                 <div>
                   <span className="text-sm font-medium text-gray-600">Offer Discussed:</span>
@@ -1117,6 +1394,20 @@ export default function CallReportDetailPage() {
                 </div>
               )}
             </div>
+
+            {/* Key Pain Points */}
+            {feedback.callSummary.keyPainPoints && feedback.callSummary.keyPainPoints.length > 0 && (
+              <div className="mt-4">
+                <span className="text-sm font-medium text-gray-600 block mb-2">Key Pain Points:</span>
+                <div className="flex flex-wrap gap-2">
+                  {feedback.callSummary.keyPainPoints.map((painPoint, index) => (
+                    <span key={index} className="px-3 py-1 bg-red-100 text-red-800 text-sm rounded-full">
+                      {painPoint}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1245,6 +1536,11 @@ export default function CallReportDetailPage() {
                       Trained
                     </span>
                   )}
+                  {report.feedback?.sentimentAnalysis && (
+                    <span className={`text-sm font-medium px-2.5 py-0.5 rounded-full ${getSentimentColor(report.feedback.sentimentAnalysis.overall)}`}>
+                      {report.feedback.sentimentAnalysis.overall} sentiment
+                    </span>
+                  )}
                 </div>
                 <p className="text-gray-600">Call SID: {report.callSid}</p>
 
@@ -1331,8 +1627,8 @@ export default function CallReportDetailPage() {
                 <button
                   onClick={() => setActiveTab('conversation')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'conversation'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
                   <div className="flex items-center space-x-2">
@@ -1343,10 +1639,29 @@ export default function CallReportDetailPage() {
                   </div>
                 </button>
                 <button
+                  onClick={() => setActiveTab('stages')}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'stages'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <span>Stages & Analytics</span>
+                    {report.feedback?.stageProgression && (
+                      <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                        Available
+                      </span>
+                    )}
+                  </div>
+                </button>
+                <button
                   onClick={() => setActiveTab('feedback')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm ${activeTab === 'feedback'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                     }`}
                 >
                   <div className="flex items-center space-x-2">
@@ -1364,8 +1679,9 @@ export default function CallReportDetailPage() {
               </nav>
             </div>
 
-            {/* Tab Content */}
-            {activeTab === 'conversation' ? renderConversationTab() : renderFeedbackTab()}
+            {activeTab === 'conversation' && renderConversationTab()}
+            {activeTab === 'stages' && renderStagesTab()}
+            {activeTab === 'feedback' && renderFeedbackTab()}
           </div>
         </div>
       </main>

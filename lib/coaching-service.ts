@@ -47,6 +47,7 @@ interface SimpleCoachingTip {
   timestamp: string;
   conversationStage: string;
   suggestedScript: string;
+  sentiment: string;
 }
 
 class EnhancedConversationTracker {
@@ -653,7 +654,6 @@ class EnhancedCoachingService {
     conversation: any
   ): Promise<SimpleCoachingTip | null> {
 
-    console.log('conversation ------>', conversation);
     const { turns, analytics } = conversation;
     const lastCustomerTurn = turns.filter((t: ConversationTurn) => t.speaker === 'customer').slice(-1)[0];
     if (!lastCustomerTurn) {
@@ -700,7 +700,8 @@ class EnhancedCoachingService {
         reasoning: `${tipData.reasoning} (Based on ${turns.length} conversation turns + ${conversation.tipHistory?.length || 0} previous tips)`,
         callSid,
         timestamp: new Date().toISOString(),
-        conversationStage: analytics.conversationStage
+        conversationStage: analytics.conversationStage,
+        sentiment: tipData.sentiment
       };
       
     } catch (error) {

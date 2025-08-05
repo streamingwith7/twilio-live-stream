@@ -12,6 +12,7 @@ interface CoachingTip {
   callSid: string;
   timestamp: string;
   conversationStage: string;
+  sentiment: string;
 }
 
 interface CallAnalytics {
@@ -200,24 +201,6 @@ export default function SimpleRealTimeCoaching({
     }
   };
 
-  const getSentimentIcon = (sentiment: string) => {
-    switch (sentiment) {
-      case 'positive': return '😊';
-      case 'negative': return '😞';
-      case 'neutral': return '😐';
-      default: return '🤔';
-    }
-  };
-
-  const getSentimentColor = (sentiment: string) => {
-    switch (sentiment) {
-      case 'positive': return 'text-green-400';
-      case 'negative': return 'text-red-400';
-      case 'neutral': return 'text-yellow-400';
-      default: return 'text-gray-400';
-    }
-  };
-
   if (!isCallActive && tips.length === 0) {
     return null;
   }
@@ -269,9 +252,8 @@ export default function SimpleRealTimeCoaching({
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className="text-slate-300">Sentiment:</span>
-                  <span className={`flex items-center space-x-1 ${getSentimentColor(analytics.customerSentiment)}`}>
-                    <span>{getSentimentIcon(analytics.customerSentiment)}</span>
-                    <span className="font-medium capitalize">{analytics.customerSentiment}</span>
+                  <span className={`flex items-center space-x-1`}>
+                    <span className="font-medium capitalize">{tips[tips.length - 1]?.sentiment || 'neutral'}</span>
                   </span>
                 </div>
                 <div className="flex items-center space-x-2">

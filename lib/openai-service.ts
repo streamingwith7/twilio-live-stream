@@ -107,9 +107,6 @@ class EnhancedOpenAIService {
   async generateCoachingTip(context: ConversationContext): Promise<any> {
     try {
       const prompts = await this.getPrompts();
-      console.log('conversation ------>', context.conversationHistory);
-      
-      console.log('previous tips ----------->', context.previousTips);
       if (!prompts.salesCoach) {
         throw new Error('Required prompts not found in cache');
       }
