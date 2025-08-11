@@ -14,14 +14,6 @@ export async function POST(request: NextRequest) {
 
   const feedback = await openaiService.generateCallFeedbackFromTranscript(transcript, agent, seller);
 
-  console.log('data -------->', {
-    agent,
-    seller,
-    feedback,
-    transcript,
-    userId: request.headers.get('x-user-id')
-  });
-
   const userId = request.headers.get('x-user-id');
   
   if (!userId) {

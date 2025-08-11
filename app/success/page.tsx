@@ -62,9 +62,6 @@ export default function Success() {
               <span className="text-white font-semibold text-lg">AI Deal Assistant</span>
             </div>
             <div className="flex items-center space-x-4">
-              <span className="text-white/80 hidden sm:block">
-                Welcome, {user?.firstName || user?.email}
-              </span>
               <button
                 onClick={handleLogout}
                 className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-colors backdrop-blur-sm border border-white/20"

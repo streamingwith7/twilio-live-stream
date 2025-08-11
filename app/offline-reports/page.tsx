@@ -32,6 +32,23 @@ export default function OfflineReportsPage() {
   const [agent, setAgent] = useState('')
   const [seller, setSeller] = useState('')
 
+  // Helper function for authenticated API calls
+  const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}) => {
+    const token = localStorage.getItem('token')
+    
+    if (!token) {
+      throw new Error('No authentication token found')
+    }
+
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`
+      }
+    })
+  }
+
   useEffect(() => {
     const token = localStorage.getItem('token')
     const userData = localStorage.getItem('user')
@@ -48,7 +65,7 @@ export default function OfflineReportsPage() {
   const fetchFeedbacks = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/offline-reports')
+      const response = await makeAuthenticatedRequest('/api/offline-reports')
       const data = await response.json()
 
       if (response.ok) {
@@ -58,7 +75,7 @@ export default function OfflineReportsPage() {
       }
     } catch (error) {
       console.error('Error fetching feedbacks:', error)
-      setError('Failed to fetch feedbacks')
+      setError(error instanceof Error ? error.message : 'Failed to fetch feedbacks')
     } finally {
       setLoading(false)
     }
@@ -76,10 +93,10 @@ export default function OfflineReportsPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/report', {
+      const response = await makeAuthenticatedRequest('/api/report', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           transcript: transcript.trim(),
@@ -103,7 +120,7 @@ export default function OfflineReportsPage() {
       }
     } catch (error) {
       console.error('Error submitting transcript:', error)
-      setError('Failed to generate feedback')
+      setError(error instanceof Error ? error.message : 'Failed to generate feedback')
     } finally {
       setSubmitting(false)
     }
@@ -115,8 +132,8 @@ export default function OfflineReportsPage() {
     }
 
     try {
-      const response = await fetch(`/api/offline-reports?id=${feedbackId}`, {
-        method: 'DELETE',
+      const response = await makeAuthenticatedRequest(`/api/offline-reports?id=${feedbackId}`, {
+        method: 'DELETE'
       })
 
       if (response.ok) {
@@ -130,7 +147,7 @@ export default function OfflineReportsPage() {
       }
     } catch (error) {
       console.error('Error deleting feedback:', error)
-      setError('Failed to delete feedback')
+      setError(error instanceof Error ? error.message : 'Failed to delete feedback')
     }
   }
 
@@ -323,13 +340,7 @@ export default function OfflineReportsPage() {
           </div>
         )}
 
-        {/* Raw Feedback Display for debugging */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Raw Feedback Data</h4>
-          <pre className="text-xs text-gray-600 whitespace-pre-wrap overflow-auto max-h-64">
-            {JSON.stringify(feedback, null, 2)}
-          </pre>
-        </div>
+
       </div>
     )
   }

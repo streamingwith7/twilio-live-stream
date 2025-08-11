@@ -1,36 +1,47 @@
 import { NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { jwtVerify } from 'jose'
 import type { NextRequest } from 'next/server'
 
+// Use the same secret pattern as in auth.ts
+const JWT_SECRET = process.env.NEXTAUTH_SECRET || 'fallback-secret'
+
 export async function middleware(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-  
-  // Protected routes
-  const protectedPaths = [
-    '/dashboard',
-    '/call-logs',
-    '/call-reports',
-    '/browser-calling',
-    '/make-call',
-    '/prompt-management',
-    '/transcription',
-    '/debug'
+
+  const protectedApiPaths = [
+    '/api/offline-reports',
+    '/api/report'
   ]
-  
-  const isProtectedPath = protectedPaths.some(path => 
+  const isProtectedApiPath = protectedApiPaths.some(path =>
     req.nextUrl.pathname.startsWith(path)
   )
-  
-  if (isProtectedPath && !token) {
-    return NextResponse.redirect(new URL('/auth/signin', req.url))
+
+  if (isProtectedApiPath) {
+    const authHeader = req.headers.get('Authorization')
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized - Missing token' }, { status: 401 })
+    }
+
+          const token = authHeader.substring(7)
+
+      try {
+        const secret = new TextEncoder().encode(JWT_SECRET)
+        const { payload } = await jwtVerify(token, secret)
+        
+        const userId = payload.userId as string
+        if (!userId) {
+          return NextResponse.json({ error: 'Unauthorized - No user ID in token' }, { status: 401 })
+        }
+        
+        const response = NextResponse.next()
+        response.headers.set('x-user-id', userId)
+        return response
+      } catch (error) {
+        return NextResponse.json({ error: 'Unauthorized - Invalid token' }, { status: 401 })
+      }
   }
-  
-  if (token?.sub) {
-    const response = NextResponse.next()
-    response.headers.set('x-user-id', token.sub)
-    return response
-  }
-  
+
   return NextResponse.next()
 }
 
@@ -43,6 +54,9 @@ export const config = {
     '/make-call/:path*',
     '/prompt-management/:path*',
     '/transcription/:path*',
-    '/debug/:path*'
+    '/debug/:path*',
+    '/offline-reports/:path*',
+    '/api/offline-reports/:path*',
+    '/api/report/:path*'
   ]
 } 
