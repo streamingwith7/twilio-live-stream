@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,18 +8,33 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  firstName   String
-  lastName    String
-  phoneNumber String?
-  department  String?
-  password    String
-  streams     Stream[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  firstName            String
+  lastName             String
+  phoneNumber          String?
+  department           String?
+  password             String
+  streams              Stream[]
+  offlineCallFeedbacks OfflineCallFeedback[]
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
 
   @@map("users")
+}
+
+model OfflineCallFeedback {
+  id         String   @id @default(cuid())
+  agent      String
+  seller     String
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  feedback   Json
+  transcript String   @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("offline_call_feedbacks")
 }
 
 model CallRecord {

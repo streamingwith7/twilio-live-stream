@@ -406,6 +406,39 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
     }
   }
 
+  async generateCallFeedbackFromTranscript(transcript: string, agent: string, seller: string): Promise<any> {
+    try {
+      const prompts = await this.getPrompts();
+      if (!prompts.callFeedback) {
+        throw new Error('Call feedback prompt not found in cache');
+      }
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: prompts.callFeedback },
+          { role: "user", content: `
+            FULL CONVERSATION:
+            ${transcript}
+            
+            AGENT:
+            ${agent}
+
+            SELLER:
+            ${seller}` }
+        ],
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) return null;
+
+      return this.parseJsonResponse(content);
+    } catch (error) {
+      console.error('Error generating call feedback from transcript:', error);
+      return null;
+    }
+  }
+
   async analyzeTipUsage(conversationTurns: any[], tipHistory: any[]): Promise<any[]> {
     try {
       if (!tipHistory || tipHistory.length === 0) {

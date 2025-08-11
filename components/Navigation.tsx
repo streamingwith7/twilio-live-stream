@@ -15,6 +15,7 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
     { name: 'Dashboard', href: '/dashboard', icon: 'dashboard' },
     { name: 'Make Call', href: '/make-call', icon: 'call' },
     { name: 'Call Reports', href: '/call-reports', icon: 'reports' },
+    { name: 'Offline Reports', href: '/offline-reports', icon: 'offline' },
     { name: 'Prompt Management', href: '/prompt-management', icon: 'prompts' }
   ]
 
@@ -35,6 +36,10 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
       case 'reports':
         return (
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        )
+      case 'offline':
+        return (
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z M4 7h.01M7 15h.01" />
         )
       case 'prompts':
         return (

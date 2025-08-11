@@ -503,6 +503,17 @@ class EnhancedCoachingService {
     };
 
     try {
+
+      console.log('payload ---------->', {
+        conversationHistory: turns,
+        fullConversation,
+        analytics: {
+          ...analytics,
+          conversationSummary
+        },
+        tipHistory: tipHistory || []
+      });
+
       const feedbackData = await openaiService.generateCallFeedback({
         conversationHistory: turns,
         fullConversation,

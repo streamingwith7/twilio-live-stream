@@ -95,7 +95,8 @@ interface FeedbackData {
   }
   stageProgression?: {
     setTheStage: StageProgression
-    "Walkthrough-Building-Rapport": StageProgression
+    "Walkthrough": StageProgression
+    "Building-Rapport": StageProgression
     "DiscoverPersonalMotivation(s)": StageProgression
     dealKillers: StageProgression
     Transition: StageProgression
@@ -1033,7 +1034,8 @@ export default function CallReportDetailPage() {
 
     const stageLabels = {
       setTheStage: 'Set the Stage',
-      "Walkthrough-Building-Rapport": 'Walkthrough / Building Rapport',
+      "Walkthrough": 'Walkthrough',
+      "Building-Rapport": 'Building Rapport',
       "DiscoverPersonalMotivation(s)": 'Discover the Personal Motivation(s) That Will Lead to Action',
       dealKillers: 'Deal Killer (Risk/Discomfort,Relationships,Time,Competition/Options)',
       Transition: 'Transition',
@@ -1085,7 +1087,6 @@ export default function CallReportDetailPage() {
           </div>
         )}
 
-        {/* Stage Progression */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center mb-6">
             <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
@@ -1097,7 +1098,7 @@ export default function CallReportDetailPage() {
           </div>
 
           <div className="space-y-4">
-            {stageProgression ? (["setTheStage", "Walkthrough-Building-Rapport", "DiscoverPersonalMotivation(s)", "dealKillers", "Transition", "Solution-Offer"] as const).map((stageKey) => (
+            {stageProgression ? (["setTheStage", "Walkthrough", "Building-Rapport", "DiscoverPersonalMotivation(s)", "dealKillers", "Transition", "Solution-Offer"] as const).map((stageKey) => (
               <div key={stageKey} className="border border-gray-200 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-medium text-gray-900">
