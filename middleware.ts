@@ -10,7 +10,9 @@ export async function middleware(req: NextRequest) {
 
   const protectedApiPaths = [
     '/api/offline-reports',
-    '/api/report'
+    '/api/report',
+    '/api/manager-comments',
+    '/api/upload-audio'
   ]
   const isProtectedApiPath = protectedApiPaths.some(path =>
     req.nextUrl.pathname.startsWith(path)
@@ -57,6 +59,8 @@ export const config = {
     '/debug/:path*',
     '/offline-reports/:path*',
     '/api/offline-reports/:path*',
-    '/api/report/:path*'
+    '/api/report/:path*',
+    '/api/manager-comments/:path*',
+    '/api/upload-audio/:path*'
   ]
 } 

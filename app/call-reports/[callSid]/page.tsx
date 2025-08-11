@@ -1114,7 +1114,6 @@ export default function CallReportDetailPage() {
                   </div>
                 </div>
  
-                {/* Progress Bar */}
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-3">
                   <div
                     className={`h-2 rounded-full transition-all duration-300 ${stageProgression[stageKey].percentage >= 80 ? 'bg-green-500' :
@@ -1140,7 +1139,6 @@ export default function CallReportDetailPage() {
           </div>
         </div>
 
-        {/* Strengths */}
         {feedback.strengths && feedback.strengths.length > 0 && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex items-center mb-4">

@@ -4,3 +4,7 @@ node_modules
 .next
 package-lock.json
 .vercel
+
+# Uploaded files
+public/uploads/audio/*
+!public/uploads/audio/.gitkeep

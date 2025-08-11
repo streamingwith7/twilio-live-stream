@@ -13,8 +13,23 @@ interface OfflineFeedback {
   seller: string
   feedback: any
   transcript: string
+  recordingUrl?: string
   createdAt: string
   updatedAt: string
+  managerComments?: Array<{
+    id: string
+    sectionName: string
+    sectionKey?: string
+    agreement: string
+    comment: string
+    manager: {
+      id: string
+      firstName: string
+      lastName: string
+      email: string
+    }
+    createdAt: string
+  }>
 }
 
 export default function OfflineReportsPage() {
@@ -24,13 +39,14 @@ export default function OfflineReportsPage() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedFeedback, setSelectedFeedback] = useState<OfflineFeedback | null>(null)
   const [showForm, setShowForm] = useState(false)
   
   // Form state
   const [transcript, setTranscript] = useState('')
   const [agent, setAgent] = useState('')
   const [seller, setSeller] = useState('')
+  const [audioFile, setAudioFile] = useState<File | null>(null)
+  const [uploading, setUploading] = useState(false)
 
   // Helper function for authenticated API calls
   const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}) => {
@@ -93,6 +109,32 @@ export default function OfflineReportsPage() {
     setError(null)
 
     try {
+      let recordingUrl = null
+
+      // Upload audio file if provided
+      if (audioFile) {
+        setUploading(true)
+        const formData = new FormData()
+        formData.append('audio', audioFile)
+
+        const uploadResponse = await makeAuthenticatedRequest('/api/upload-audio', {
+          method: 'POST',
+          body: formData
+        })
+
+        if (uploadResponse.ok) {
+          const uploadData = await uploadResponse.json()
+          recordingUrl = uploadData.fileUrl
+        } else {
+          const uploadError = await uploadResponse.json()
+          setError(uploadError.error || 'Failed to upload audio file')
+          setUploading(false)
+          setSubmitting(false)
+          return
+        }
+        setUploading(false)
+      }
+
       const response = await makeAuthenticatedRequest('/api/report', {
         method: 'POST',
         headers: {
@@ -101,7 +143,8 @@ export default function OfflineReportsPage() {
         body: JSON.stringify({
           transcript: transcript.trim(),
           agent: agent.trim(),
-          seller: seller.trim()
+          seller: seller.trim(),
+          recordingUrl: recordingUrl
         }),
       })
 
@@ -110,6 +153,7 @@ export default function OfflineReportsPage() {
         setTranscript('')
         setAgent('')
         setSeller('')
+        setAudioFile(null)
         setShowForm(false)
         
         // Refresh feedbacks list
@@ -123,6 +167,7 @@ export default function OfflineReportsPage() {
       setError(error instanceof Error ? error.message : 'Failed to generate feedback')
     } finally {
       setSubmitting(false)
+      setUploading(false)
     }
   }
 
@@ -138,9 +183,6 @@ export default function OfflineReportsPage() {
 
       if (response.ok) {
         setFeedbacks(prev => prev.filter(f => f.id !== feedbackId))
-        if (selectedFeedback?.id === feedbackId) {
-          setSelectedFeedback(null)
-        }
       } else {
         const errorData = await response.json()
         setError(errorData.error || 'Failed to delete feedback')
@@ -182,168 +224,7 @@ export default function OfflineReportsPage() {
     router.push('/')
   }
 
-  const renderFeedbackDetails = (feedback: any) => {
-    if (!feedback) return null
-
-    return (
-      <div className="space-y-6">
-        {/* Overall Performance */}
-        {feedback.totalScore !== undefined && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Overall Performance</h3>
-              <div className={`px-3 py-1 rounded-full text-sm font-medium ${getScoreColor(feedback.totalScore)}`}>
-                {feedback.totalScore}/100
-              </div>
-            </div>
-
-            {feedback.callType && (
-              <p className="text-sm text-gray-600 mb-4">
-                <span className="font-medium">Call Type:</span> {feedback.callType}
-              </p>
-            )}
-
-            {feedback.scores && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {Object.entries(feedback.scores).map(([key, score]: [string, any]) => (
-                  <div key={key} className="text-center">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2 ${getScoreColor(score)}`}>
-                      <span className="text-lg font-bold">{score}</span>
-                    </div>
-                    <p className="text-xs text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* What Went Well */}
-        {feedback.whatWentWell && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">What Went Well</h3>
-            </div>
-            <p className="text-gray-700 leading-relaxed">{feedback.whatWentWell}</p>
-          </div>
-        )}
-
-        {/* Strengths */}
-        {feedback.strengths && feedback.strengths.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Strengths</h3>
-            </div>
-            <ul className="space-y-2">
-              {feedback.strengths.map((strength: string, index: number) => (
-                <li key={index} className="flex items-start space-x-2">
-                  <svg className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-sm text-gray-700">{strength}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Areas for Improvement */}
-        {((feedback.areasForImprovement && feedback.areasForImprovement.length > 0) || feedback.improvementArea1 || feedback.improvementArea2) && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center mr-3">
-                <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Areas for Improvement</h3>
-            </div>
-            
-            {feedback.areasForImprovement && feedback.areasForImprovement.length > 0 && (
-              <ul className="space-y-2 mb-4">
-                {feedback.areasForImprovement.map((area: string, index: number) => (
-                  <li key={index} className="flex items-start space-x-2">
-                    <svg className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-sm text-gray-700">{area}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-
-            {(feedback.improvementArea1 || feedback.improvementArea2) && (
-              <div className="space-y-4">
-                {feedback.improvementArea1 && (
-                  <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <h4 className="font-medium text-yellow-800 mb-2">Improvement Area 1</h4>
-                    <p className="text-yellow-700 text-sm">{feedback.improvementArea1}</p>
-                  </div>
-                )}
-                {feedback.improvementArea2 && (
-                  <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <h4 className="font-medium text-yellow-800 mb-2">Improvement Area 2</h4>
-                    <p className="text-yellow-700 text-sm">{feedback.improvementArea2}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Coaching Advice */}
-        {feedback.coachingAdvice && feedback.coachingAdvice.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Coaching Advice</h3>
-            </div>
-            <ul className="space-y-2">
-              {feedback.coachingAdvice.map((advice: string, index: number) => (
-                <li key={index} className="flex items-start space-x-2">
-                  <svg className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M9.664 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" clipRule="evenodd" />
-                  </svg>
-                  <span className="text-sm text-gray-700">{advice}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {/* Outcome & Next Steps */}
-        {feedback.outcomeNextStep && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-teal-100 rounded-full flex items-center justify-center mr-3">
-                <svg className="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900">Outcome & Next Steps</h3>
-            </div>
-            <p className="text-gray-700 leading-relaxed">{feedback.outcomeNextStep}</p>
-          </div>
-        )}
-
-
-      </div>
-    )
-  }
+  
 
   if (loading) {
     return <LoadingSpinner fullScreen message="Loading offline reports..." />
@@ -427,6 +308,62 @@ export default function OfflineReportsPage() {
                   </div>
                 </div>
                 <div>
+                  <label htmlFor="audioFile" className="block text-sm font-medium text-gray-700 mb-1">
+                    Call Recording (Optional)
+                  </label>
+                  <input
+                    type="file"
+                    id="audioFile"
+                    accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        // Validate file size (50MB limit)
+                        const maxSize = 50 * 1024 * 1024
+                        if (file.size > maxSize) {
+                          setError('File too large. Maximum size is 50MB.')
+                          e.target.value = ''
+                          return
+                        }
+                        
+                        // Validate file type
+                        const allowedTypes = [
+                          'audio/mpeg',
+                          'audio/mp3', 
+                          'audio/wav',
+                          'audio/mp4',
+                          'audio/m4a',
+                          'audio/aac',
+                          'audio/ogg',
+                          'audio/webm'
+                        ]
+                        
+                        if (!allowedTypes.includes(file.type)) {
+                          setError('Invalid file type. Please upload an audio file (MP3, WAV, M4A, AAC, OGG, WebM).')
+                          e.target.value = ''
+                          return
+                        }
+                        
+                        setError(null)
+                        setAudioFile(file)
+                      } else {
+                        setAudioFile(null)
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  />
+                  <p className="text-sm text-gray-500 mt-1">
+                    Upload an audio file of the call so managers can listen while reviewing the analysis. Supported formats: MP3, WAV, M4A, AAC, OGG, WebM (max 50MB).
+                  </p>
+                  {audioFile && (
+                    <div className="mt-2 p-2 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <span className="font-medium">Selected:</span> {audioFile.name} ({(audioFile.size / 1024 / 1024).toFixed(2)} MB)
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div>
                   <label htmlFor="transcript" className="block text-sm font-medium text-gray-700 mb-1">
                     Call Transcript
                   </label>
@@ -450,10 +387,18 @@ export default function OfflineReportsPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={submitting}
+                    disabled={submitting || uploading}
                     className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-lg transition-colors flex items-center space-x-2"
                   >
-                    {submitting ? (
+                    {uploading ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                          <path fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" className="opacity-75" />
+                        </svg>
+                        <span>Uploading Audio...</span>
+                      </>
+                    ) : submitting ? (
                       <>
                         <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                           <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
@@ -475,101 +420,121 @@ export default function OfflineReportsPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Feedbacks List */}
-            <div className="lg:col-span-1">
-              <div className="bg-white shadow-lg rounded-lg">
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="text-lg font-semibold text-gray-900">Past Analyses ({feedbacks.length})</h2>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  {feedbacks.length === 0 ? (
-                    <div className="p-6 text-center">
-                      <svg className="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <p className="text-gray-500">No analyses yet</p>
-                      <p className="text-sm text-gray-400 mt-1">Submit your first transcript to get started</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-gray-200">
-                      {feedbacks.map((feedback) => (
-                        <div
-                          key={feedback.id}
-                          className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
-                            selectedFeedback?.id === feedback.id ? 'bg-blue-50 border-r-4 border-blue-500' : ''
-                          }`}
-                          onClick={() => setSelectedFeedback(feedback)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {feedback.agent} → {feedback.seller}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-1">
-                                {formatDate(feedback.createdAt)}
-                              </p>
-                              {feedback.feedback?.totalScore && (
-                                <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-2 ${getScoreColor(feedback.feedback.totalScore)}`}>
-                                  Score: {feedback.feedback.totalScore}/100
-                                </div>
-                              )}
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleDelete(feedback.id)
-                              }}
-                              className="ml-2 text-red-400 hover:text-red-600"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
+          {/* Reports Table */}
+          <div className="bg-white shadow-lg rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Past Analyses ({feedbacks.length})</h2>
             </div>
-
-            {/* Feedback Details */}
-            <div className="lg:col-span-2">
-              {selectedFeedback ? (
-                <div className="bg-white shadow-lg rounded-lg">
-                  <div className="px-6 py-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-lg font-semibold text-gray-900">
-                          Analysis: {selectedFeedback.agent} → {selectedFeedback.seller}
-                        </h2>
-                        <p className="text-sm text-gray-500 mt-1">
-                          Generated on {formatDate(selectedFeedback.createdAt)}
-                        </p>
-                      </div>
-                      {selectedFeedback.feedback?.sentimentAnalysis && (
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getSentimentColor(selectedFeedback.feedback.sentimentAnalysis.overall)}`}>
-                          {selectedFeedback.feedback.sentimentAnalysis.overall} sentiment
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="p-6 max-h-96 overflow-y-auto">
-                    {renderFeedbackDetails(selectedFeedback.feedback)}
-                  </div>
+            <div className="overflow-x-auto">
+              {feedbacks.length === 0 ? (
+                <div className="p-12 text-center">
+                  <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No analyses yet</h3>
+                  <p className="text-gray-500">Submit your first transcript to get started</p>
                 </div>
               ) : (
-                <div className="bg-white shadow-lg rounded-lg">
-                  <div className="p-12 text-center">
-                    <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Select an Analysis</h3>
-                    <p className="text-gray-500">Choose a feedback report from the list to view detailed analysis</p>
-                  </div>
-                </div>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Agent
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Seller
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Score
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Recording
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {feedbacks.map((feedback) => (
+                      <tr 
+                        key={feedback.id} 
+                        className="hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => router.push(`/offline-reports/${feedback.id}`)}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{feedback.agent}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{feedback.seller}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {feedback.feedback?.totalScore ? (
+                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getScoreColor(feedback.feedback.totalScore)}`}>
+                              {feedback.feedback.totalScore}/100
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {feedback.recordingUrl ? (
+                            <div className="flex items-center space-x-2">
+                              <audio 
+                                controls 
+                                className="h-8"
+                                onClick={(e) => e.stopPropagation()}
+                                preload="none"
+                              >
+                                <source src={feedback.recordingUrl} type="audio/mpeg" />
+                                <source src={feedback.recordingUrl} type="audio/wav" />
+                                <source src={feedback.recordingUrl} type="audio/mp4" />
+                                Your browser does not support the audio element.
+                              </audio>
+                              <a
+                                href={feedback.recordingUrl}
+                                download
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-blue-600 hover:text-blue-900 text-xs"
+                                title="Download audio file"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                              </a>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{formatDate(feedback.createdAt)}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <Link
+                            href={`/offline-reports/${feedback.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-blue-600 hover:text-blue-900 mr-4"
+                          >
+                            View Details
+                          </Link>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDelete(feedback.id)
+                            }}
+                            className="text-red-600 hover:text-red-900"
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           </div>

@@ -96,7 +96,6 @@ export default function Navigation({ user, onLogout }: NavigationProps) {
           </div>
           
           <div className="flex items-center space-x-4">
-            <span className="text-gray-700">Welcome, {user?.firstName || user?.email}</span>
             <button
               onClick={onLogout}
               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors"

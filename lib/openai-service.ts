@@ -427,6 +427,9 @@ Provide ONLY this JSON structure (no markdown, no code blocks):
             SELLER:
             ${seller}` }
         ],
+        temperature: 0.3,
+        max_tokens: 2000,
+        response_format: { type: "json_object" }
       });
 
       const content = response.choices[0]?.message?.content;

@@ -17,6 +17,7 @@ model User {
   password             String
   streams              Stream[]
   offlineCallFeedbacks OfflineCallFeedback[]
+  managerComments      ManagerComment[]      @relation("ManagerComments") // Comments made by this user as a manager
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -24,15 +25,17 @@ model User {
 }
 
 model OfflineCallFeedback {
-  id         String   @id @default(cuid())
-  agent      String
-  seller     String
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  feedback   Json
-  transcript String   @db.Text
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               String           @id @default(cuid())
+  agent            String
+  seller           String
+  userId           String
+  user             User             @relation(fields: [userId], references: [id])
+  feedback         Json
+  transcript       String           @db.Text
+  recordingUrl     String?          // URL to the call recording for manager review
+  managerComments  ManagerComment[] // Related manager comments
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
   @@map("offline_call_feedbacks")
 }
@@ -141,4 +144,20 @@ enum PromptType {
   CALL_FEEDBACK
   COACHING_RULES
   PROMPT_HELPERS
+}
+
+model ManagerComment {
+  id                    String              @id @default(cuid())
+  offlineCallFeedbackId String
+  offlineCallFeedback   OfflineCallFeedback @relation(fields: [offlineCallFeedbackId], references: [id], onDelete: Cascade)
+  sectionName           String              // e.g., "Overall Performance", "Stage Progression", "Sentiment Analysis"
+  sectionKey            String?             // Optional specific key for subsections
+  agreement             String              // "agree", "disagree", or "partially_agree"
+  comment               String              @db.Text // Manager's detailed comment/reasoning
+  managerId             String              // User ID of the manager who made the comment
+  manager               User                @relation("ManagerComments", fields: [managerId], references: [id])
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@map("manager_comments")
 }
